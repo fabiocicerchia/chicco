@@ -292,6 +292,13 @@ ID from the `models:` section of `chicco.yaml`, the request is routed only to th
 backends configured for that model. Use `chicco:auto` (or any unknown model name)
 to route across all active providers regardless of model.
 
+`GET /v1/status` is also useful for a `-headless` deployment that stays
+observable without a terminal:
+
+```sh
+curl -s localhost:41986/v1/status | jq
+```
+
 ## Contributing
 
 Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
