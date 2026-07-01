@@ -58,6 +58,15 @@ func (b *logBuffer) tail(n int) []string {
 	return out
 }
 
+// allLines returns a copy of all stored lines, oldest first.
+func (b *logBuffer) allLines() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]string, len(b.lines))
+	copy(out, b.lines)
+	return out
+}
+
 // ── styles ──────────────────────────────────────────────────────────────────
 
 var (
@@ -82,17 +91,28 @@ func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
+// focusPane identifies which panel currently has keyboard focus.
+type focusPane int
+
+const (
+	focusProviders focusPane = iota
+	focusLogs
+)
+
 // uiModel is the dashboard: a live table of providers (top) over a log pane
-// (bottom half). It polls the rotator and log buffer once a second.
+// (bottom). It polls the rotator and log buffer once a second.
 type uiModel struct {
-	rot           *Rotator
-	logs          *logBuffer
-	addr          string
-	width, height int
+	rot            *Rotator
+	logs           *logBuffer
+	addr           string
+	width, height  int
+	focus          focusPane
+	providerScroll int // rows scrolled down in the provider table (0 = top)
+	logScroll      int // rows scrolled up from the bottom in the log pane (0 = bottom)
 }
 
 func newUIModel(rot *Rotator, logs *logBuffer, addr string) uiModel {
-	return uiModel{rot: rot, logs: logs, addr: addr}
+	return uiModel{rot: rot, logs: logs, addr: addr, focus: focusProviders}
 }
 
 func (m uiModel) Init() tea.Cmd { return tick() }
@@ -110,6 +130,48 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// logged to the pane and fold back into the table. Runs in the
 			// background so the dashboard stays responsive.
 			go runTest(m.rot)
+		case "tab":
+			if m.focus == focusProviders {
+				m.focus = focusLogs
+			} else {
+				m.focus = focusProviders
+			}
+		case "up", "k":
+			if m.focus == focusProviders {
+				if m.providerScroll > 0 {
+					m.providerScroll--
+				}
+			} else {
+				m.logScroll++
+			}
+		case "down", "j":
+			if m.focus == focusProviders {
+				m.providerScroll++
+			} else {
+				if m.logScroll > 0 {
+					m.logScroll--
+				}
+			}
+		case "pgup":
+			page := m.pageSize()
+			if m.focus == focusProviders {
+				m.providerScroll -= page
+				if m.providerScroll < 0 {
+					m.providerScroll = 0
+				}
+			} else {
+				m.logScroll += page
+			}
+		case "pgdown":
+			page := m.pageSize()
+			if m.focus == focusProviders {
+				m.providerScroll += page
+			} else {
+				m.logScroll -= page
+				if m.logScroll < 0 {
+					m.logScroll = 0
+				}
+			}
 		}
 	case tickMsg:
 		return m, tick()
@@ -117,85 +179,157 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// pageSize returns how many lines to jump on pgup/pgdown — half the log pane height.
+func (m uiModel) pageSize() int {
+	logH := m.height * 2 / 5
+	p := (logH - 2) / 2
+	if p < 1 {
+		p = 1
+	}
+	return p
+}
+
 func (m uiModel) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "starting chicco dashboard…"
 	}
-	logH := m.height / 2
+	logH := m.height * 2 / 5
+	if logH < 4 {
+		logH = 4
+	}
 	topH := m.height - logH
-	top := m.renderModels(m.width, topH)
-	bottom := m.renderLogs(m.width, logH)
+	top := m.renderModels(m.width, topH, m.providerScroll, m.focus == focusProviders)
+	bottom := m.renderLogs(m.width, logH, m.logScroll, m.focus == focusLogs)
 	return lipgloss.JoinVertical(lipgloss.Left, top, bottom)
 }
 
 // renderModels draws the provider table inside a box of exactly w×h.
-func (m uiModel) renderModels(w, h int) string {
+// scroll is how many provider rows have been scrolled past the top (0 = top).
+// focused controls whether the border is highlighted.
+func (m uiModel) renderModels(w, h int, scroll int, focused bool) string {
 	innerW := w - 4 // border (2) + horizontal padding (2)
 	innerH := h - 2 // border (2)
 	stats := m.rot.Snapshot()
 
-	lines := []string{
+	header := []string{
 		titleStyle.Render("chicco") + dimStyle.Render(fmt.Sprintf(" · %s · %d providers", m.addr, len(stats))),
-		headerStyle.Render(modelRow("", "STATUS", "MODEL", "USED / QUOTA", "REQS", "", innerW, true)),
+		headerStyle.Render(modelRow("", "STATUS", "KIND", "MODEL", "USED / QUOTA", "REQS", "", innerW, true)),
 	}
-	maxRows := innerH - len(lines) - 1 // reserve the last inner line for the legend
-	for i, s := range stats {
-		if i >= maxRows {
-			break
-		}
-		lines = append(lines, renderProviderRow(s, innerW))
+	// Collect all provider rows, then apply scroll.
+	maxRows := innerH - len(header) - 1 // reserve last line for legend
+	var allRows []string
+	for _, s := range stats {
+		allRows = append(allRows, providerRows(s, innerW)...)
 	}
+	// Clamp scroll so we never scroll past the last screenful.
+	maxScroll := len(allRows) - maxRows
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	visible := allRows
+	if scroll > 0 && scroll < len(allRows) {
+		visible = allRows[scroll:]
+	}
+	if len(visible) > maxRows {
+		visible = visible[:maxRows]
+	}
+
+	lines := append(header, visible...)
 	lines = append(lines, legendLine())
-	return boxStyle.Width(innerW).Height(innerH).Render(strings.Join(lines, "\n"))
+
+	style := boxStyle.Width(innerW).Height(innerH)
+	if focused {
+		style = style.BorderForeground(colTitle)
+	}
+	return style.Render(strings.Join(lines, "\n"))
 }
 
-// legendLine is the colour key for the status dots plus the quit hint.
+// legendLine is the colour key for the status dots plus key hints.
 func legendLine() string {
 	g := func(c lipgloss.Color, glyph, label string) string {
 		return lipgloss.NewStyle().Foreground(c).Render(glyph) + dimStyle.Render(" "+label)
 	}
 	sep := dimStyle.Render("   ")
 	return g(colGreen, "●", "ready") + sep + g(colAmber, "◐", "cooldown / limit") + sep +
-		g(colGrey, "●", "bad key / down") + sep + g(colGrey, "○", "checking") + sep + dimStyle.Render("t test all · q quits")
+		g(colGrey, "●", "bad key / down") + sep + g(colGrey, "○", "checking") + sep +
+		dimStyle.Render("tab focus · ↑↓/pgup/pgdn scroll · t test · q quit")
 }
 
-// renderLogs draws the tail of the log buffer inside a box of exactly w×h.
-func (m uiModel) renderLogs(w, h int) string {
+// renderLogs draws the log buffer inside a box of exactly w×h.
+// scroll is how many lines from the bottom have been scrolled past (0 = bottom/latest).
+// focused controls whether the border is highlighted.
+func (m uiModel) renderLogs(w, h int, scroll int, focused bool) string {
 	innerW := w - 4
 	innerH := h - 2
+	capacity := innerH - 1 // minus the title line
+
+	all := m.logs.allLines()
+
+	// Clamp scroll so we can't scroll past the oldest line.
+	maxScroll := len(all) - capacity
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+
+	// Select the window: scroll=0 shows the newest lines, scroll=N shows older.
+	var window []string
+	if len(all) > 0 {
+		end := len(all) - scroll
+		if end < 0 {
+			end = 0
+		}
+		start := end - capacity
+		if start < 0 {
+			start = 0
+		}
+		window = all[start:end]
+	}
+
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("logs"))
 	b.WriteString("\n")
-	lines := m.logs.tail(innerH - 1) // minus the title line
-	for i, ln := range lines {
+	for i, ln := range window {
 		b.WriteString(dimStyle.Render(truncate(ln, innerW)))
-		if i < len(lines)-1 {
+		if i < len(window)-1 {
 			b.WriteString("\n")
 		}
 	}
-	return boxStyle.Width(innerW).Height(innerH).Render(b.String())
+
+	style := boxStyle.Width(innerW).Height(innerH)
+	if focused {
+		style = style.BorderForeground(colTitle)
+	}
+	return style.Render(b.String())
 }
 
-// renderProviderRow formats one provider's stat line: status dot, name, token
-// usage, request count, and a coloured usage bar — or a status note when the
-// provider is greyed (bad key / unreachable / not yet probed) or in cooldown.
-func renderProviderRow(s ProviderStat, width int) string {
+// providerRows formats a provider's stat as one row per model. The first row
+// carries the provider name, status dot, provider-level usage figures and bar;
+// each subsequent model row shows the model name and its own token/request counts
+// and bar (scaled against the same provider quota so you can compare).
+func providerRows(s ProviderStat, width int) []string {
 	grey := lipgloss.NewStyle().Foreground(colGrey)
 	green := lipgloss.NewStyle().Foreground(colGreen)
 	amber := lipgloss.NewStyle().Foreground(colAmber)
 
 	// Governing quota: tokens take priority, then request count.
-	tokenQuota := s.QuotaTokens > 0
-	reqQuota := !tokenQuota && s.QuotaRequests > 0
+	tokenQuota := s.QuotaIsTokens && s.Quota > 0
+	reqQuota := !s.QuotaIsTokens && s.Quota > 0
 
-	var usage string
-	switch {
-	case tokenQuota:
-		usage = fmt.Sprintf("%s / %s", fmtTok(s.UsedTokens), fmtTok(s.QuotaTokens))
-	case reqQuota:
-		usage = fmt.Sprintf("%d / %d req", s.Requests, s.QuotaRequests)
-	default:
-		usage = fmt.Sprintf("%s / —", fmtTok(s.UsedTokens))
+	providerUsage := func(tokens int64, reqs int) string {
+		switch {
+		case tokenQuota:
+			return fmt.Sprintf("%s / %s", fmtTok(tokens), fmtTok(s.Quota))
+		case reqQuota:
+			return fmt.Sprintf("%d / %d req", reqs, int(s.Quota))
+		default:
+			return fmt.Sprintf("%s / —", fmtTok(tokens))
+		}
 	}
 
 	// Reserve room for a "  cd 47s" suffix when in cooldown so the bar still fits.
@@ -204,9 +338,7 @@ func renderProviderRow(s ProviderStat, width int) string {
 		reserve = 12
 	}
 	barTail := func(pct float64) string {
-		// Leave slack beyond the name(20)+model(24)+usage(18)+reqs(9) cells, the
-		// " 100%" suffix, and any cooldown note so the bar never wraps.
-		barW := width - 20 - 24 - 18 - 9 - 8 - reserve
+		barW := width - 20 - 5 - 24 - 18 - 9 - 8 - reserve
 		if barW < 6 {
 			barW = 6
 		}
@@ -216,20 +348,17 @@ func renderProviderRow(s ProviderStat, width int) string {
 		return renderBar(pct, barW) + fmt.Sprintf(" %3.0f%%", pct*100)
 	}
 
-	// The usage bar (or no-quota note) is shown regardless of cooldown.
-	var bar string
-	switch {
-	case tokenQuota:
-		bar = barTail(float64(s.UsedTokens) / float64(s.QuotaTokens))
-	case reqQuota:
-		bar = barTail(float64(s.Requests) / float64(s.QuotaRequests))
-	default:
-		bar = dimStyle.Render("(no quota)")
+	providerBar := func(tokens int64, reqs int) string {
+		switch {
+		case tokenQuota:
+			return barTail(float64(tokens) / float64(s.Quota))
+		case reqQuota:
+			return barTail(float64(reqs) / float64(s.Quota))
+		default:
+			return dimStyle.Render("(no quota)")
+		}
 	}
 
-	// Dot + trailing column by precedence: a dead/unknown key greys the row (no
-	// bar — we can't reach it); a cooldown keeps the bar and appends the timer;
-	// otherwise it's a healthy green row with its bar.
 	var dot, tail string
 	switch {
 	case s.Health == HealthAuth:
@@ -239,26 +368,46 @@ func renderProviderRow(s ProviderStat, width int) string {
 	case s.Health == HealthUnknown:
 		dot, tail = grey.Render("○"), grey.Render("checking…")
 	case s.CooldownLeft > 0 && s.CooldownKind == "limit":
-		// Window/usage limit hit — show when it reopens, not a generic cooldown.
 		dot = amber.Render("◐")
 		tail = amber.Render("limit · resets " + fmtReset(s.CooldownLeft))
 	case s.CooldownLeft > 0:
 		dot = amber.Render("◐")
-		tail = bar + amber.Render("  cd "+s.CooldownLeft.Round(time.Second).String())
+		tail = providerBar(s.UsedTokens, s.Requests) + amber.Render("  cd "+s.CooldownLeft.Round(time.Second).String())
 	default:
-		dot, tail = green.Render("●"), bar
+		dot = green.Render("●")
+		tail = providerBar(s.UsedTokens, s.Requests)
 	}
-	models := "—"
-	if len(s.Models) > 0 {
-		models = strings.Join(s.Models, ", ")
+
+	models := s.Models
+	if len(models) == 0 {
+		models = []ModelStat{{Name: "—"}}
 	}
-	return modelRow(dot, s.Name, models, usage, fmt.Sprintf("req %d", s.Requests), tail, width, false)
+
+	rows := make([]string, 0, len(models))
+	for i, ms := range models {
+		if i == 0 {
+			// First row: provider name + dot + kind + provider-level usage.
+			rows = append(rows, modelRow(dot, s.Name, s.Kind, ms.Name,
+				providerUsage(s.UsedTokens, s.Requests),
+				fmt.Sprintf("req %d", s.Requests),
+				tail, width, false))
+		} else {
+			// Continuation rows: blank name/dot/kind, per-model usage and bar.
+			modelUsage := providerUsage(ms.Tokens, ms.Requests)
+			modelTail := providerBar(ms.Tokens, ms.Requests)
+			rows = append(rows, modelRow(" ", "", "", ms.Name,
+				modelUsage,
+				fmt.Sprintf("req %d", ms.Requests),
+				modelTail, width, false))
+		}
+	}
+	return rows
 }
 
-// modelRow lays out the columns to fixed widths so the table aligns. name, model,
-// usage and reqs are plain text (truncated + padded — never wrapped, which would
-// break the row); the dot and tail carry their own ANSI and are placed as-is.
-func modelRow(dot, name, model, usage, reqs, tail string, width int, header bool) string {
+// modelRow lays out the columns to fixed widths so the table aligns. name, kind,
+// model, usage and reqs are plain text (truncated + padded — never wrapped, which
+// would break the row); the dot and tail carry their own ANSI and are placed as-is.
+func modelRow(dot, name, kind, model, usage, reqs, tail string, width int, header bool) string {
 	cell := func(s string, w int) string {
 		s = truncate(s, w-1) // w-1 so a truncated cell keeps a 1-space column gap
 		if pad := w - len([]rune(s)); pad > 0 {
@@ -267,10 +416,10 @@ func modelRow(dot, name, model, usage, reqs, tail string, width int, header bool
 		return s
 	}
 	if header {
-		return cell("  "+name, 20) + cell(model, 24) + cell(usage, 18) + cell(reqs, 9) + "USAGE"
+		return cell("  "+name, 20) + cell(kind, 5) + cell(model, 24) + cell(usage, 18) + cell(reqs, 9) + "USAGE"
 	}
 	// dot (styled, 1 col) + space fills the first 2 cols; name fills the next 18.
-	return dot + " " + cell(name, 18) + dimStyle.Render(cell(model, 24)) + cell(usage, 18) + cell(reqs, 9) + tail
+	return dot + " " + cell(name, 18) + dimStyle.Render(cell(kind, 5)) + dimStyle.Render(cell(model, 24)) + cell(usage, 18) + cell(reqs, 9) + tail
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
