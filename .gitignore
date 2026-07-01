@@ -1,0 +1,5 @@
+/bin/
+/chicco
+chicco-state.json
+*.log
+chicco.local.yaml

@@ -1,0 +1,106 @@
+# chicco — local OpenAI-compatible rotation proxy.
+#
+# chicco listens on `addr` and forwards each /v1/chat/completions request to a
+# provider below. The list order is preference order: chicco uses the first
+# provider that isn't in cooldown, so a top entry is drained until it hits a
+# quota/rate-limit (429) or auth (401/403) error, then the request falls through
+# to the next — callers see one stable endpoint while tokens rotate underneath.
+#
+# api_key supports ${VAR} expansion from the environment (recommended) or a
+# literal token. A provider with an empty key or no models is skipped. Trim the
+# list to the providers you have keys for and set the model names you can access.
+#
+# quota_tokens / quota_requests (optional) drive the dashboard's red/amber/green
+# usage bar. Tokens take priority; use quota_requests for providers capped by
+# request count rather than tokens (e.g. Google's free tier). Omit both to show
+# usage without a bar. window (daily | monthly | none, default none) resets the
+# usage counters at that boundary so the bar tracks the real remaining quota.
+
+addr: ":41986"
+
+providers:
+  - name: groq
+    base_url: https://api.groq.com/openai/v1
+    api_key: ${GROQ_API_KEY}
+    quota_tokens: 200000      # 200k tokens/day
+    window: daily
+    models:
+      - llama-3.3-70b-versatile
+  - name: cerebras
+    base_url: https://api.cerebras.ai/v1
+    api_key: ${CEREBRAS_API_KEY}
+    quota_tokens: 1000000     # 1M tokens/day
+    window: daily
+    models:
+      - llama-3.3-70b
+  - name: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key: ${OPENROUTER_API_KEY}
+    models:                   # no hard cap — leave quota/window unset
+      - deepseek/deepseek-chat-v3-0324:free
+  - name: google
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+    api_key: ${GOOGLE_API_KEY}
+    quota_requests: 1000      # Google free tier is request-capped, not token-capped
+    window: daily
+    models:
+      - gemini-2.0-flash
+
+  # ── CLI-backed providers (kind: cli) ───────────────────────────────────────
+  # Instead of an HTTP call, chicco runs a local tool and synthesizes the reply.
+  # Uncomment the ones whose CLI you have installed and logged in. Templated args
+  # use {{model}} {{system}} {{user}} {{prompt}} {{output_file}}. output: json
+  # extracts result_path (and optional tokens_path) from the tool's JSON; the
+  # default output: text uses stdout verbatim. Place these wherever you want in the
+  # order above — e.g. after the free HTTP providers to use them only as a fallback.
+  #
+  # - name: claude-cli
+  #   kind: cli
+  #   command: claude
+  #   # {{user}} (not {{prompt}}) so the system prompt isn't duplicated; --tools ""
+  #   # and --bare keep it a plain completer (no file edits). Needs `claude /login`.
+  #   args: ["-p", "{{user}}", "--model", "{{model}}", "--bare", "--tools", "",
+  #          "--system-prompt", "{{system}}", "--output-format", "json"]
+  #   output: json
+  #   result_path: result
+  #   tokens_path: usage.output_tokens
+  #   error_path: is_error          # claude sets is_error on a logged-out/failed call
+  #   health_command: ["claude", "auth", "status"]   # real login check, no inference
+  #   health_expect: '"loggedIn": true'              # grey if output lacks this
+  #   models: [sonnet, opus]
+  #
+  # - name: codex-cli
+  #   kind: cli
+  #   command: codex
+  #   # exec = non-interactive; read-only sandbox (no edits); -o writes the final
+  #   # message to the temp file so stdout logs don't pollute it. Model from config.
+  #   args: ["exec", "--sandbox", "read-only", "--skip-git-repo-check",
+  #          "--color", "never", "-o", "{{output_file}}", "{{prompt}}"]
+  #   output_file: true
+  #   health_command: ["codex", "login", "status"]   # real login check, no inference
+  #   health_expect: "Logged in"
+  #   models: [default]
+  #
+  # - name: gemini-cli
+  #   kind: cli
+  #   command: gemini
+  #   args: ["-p", "{{prompt}}", "--model", "{{model}}", "--approval-mode", "plan"]
+  #   credential: ${HOME}/.gemini/oauth_creds.json
+  #   models: [gemini-2.5-flash, gemini-2.5-pro]
+  #
+  # - name: qwen-cli
+  #   kind: cli
+  #   command: qwen
+  #   args: ["{{user}}", "--model", "{{model}}", "--system-prompt", "{{system}}",
+  #          "--approval-mode", "plan"]
+  #   credential: ${HOME}/.qwen
+  #   models: [qwen3-coder-plus]
+  #
+  # - name: kiro-cli
+  #   kind: cli
+  #   command: kiro-cli
+  #   # --no-interactive headless; --trust-tools= (empty) trusts NO tools (read-only).
+  #   args: ["chat", "--no-interactive", "--trust-tools=", "{{prompt}}"]
+  #   strip_ansi: true
+  #   credential: ${HOME}/.kiro
+  #   models: [default]
