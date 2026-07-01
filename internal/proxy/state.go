@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"time"
 )
@@ -39,15 +40,9 @@ func (r *Rotator) EnablePersistence(path string) {
 	if json.Unmarshal(data, &s) != nil {
 		return
 	}
-	for k, v := range s.Tokens {
-		r.tokens[k] = v
-	}
-	for k, v := range s.Requests {
-		r.requests[k] = v
-	}
-	for k, v := range s.WindowStart {
-		r.winStart[k] = v
-	}
+	maps.Copy(r.tokens, s.Tokens)
+	maps.Copy(r.requests, s.Requests)
+	maps.Copy(r.winStart, s.WindowStart)
 	// Restore only cooldowns that haven't elapsed yet.
 	now := time.Now()
 	for k, v := range s.Blocked {
@@ -68,21 +63,12 @@ func (r *Rotator) Persist() error {
 	}
 	now := time.Now()
 	s := persistedState{
-		Tokens:      make(map[string]int64, len(r.tokens)),
-		Requests:    make(map[string]int, len(r.requests)),
-		WindowStart: make(map[string]time.Time, len(r.winStart)),
+		Tokens:      maps.Clone(r.tokens),
+		Requests:    maps.Clone(r.requests),
+		WindowStart: maps.Clone(r.winStart),
 		Blocked:     map[string]time.Time{},
 		Reason:      map[string]string{},
 		Updated:     now,
-	}
-	for k, v := range r.tokens {
-		s.Tokens[k] = v
-	}
-	for k, v := range r.requests {
-		s.Requests[k] = v
-	}
-	for k, v := range r.winStart {
-		s.WindowStart[k] = v
 	}
 	for k, v := range r.blocked {
 		if v.After(now) { // only persist still-active cooldowns

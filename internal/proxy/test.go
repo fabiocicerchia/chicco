@@ -66,7 +66,7 @@ func runTest(rot *Rotator) {
 				log.Printf("chicco test: ✓ %s/%s — %d tok · %s", p.Name, model, res.tokens, windowDesc(p, rot))
 			} else {
 				rot.block(p.Name, cooldown(res.status, res.retryAfter), blockReason(res.status))
-				if res.status == http.StatusUnauthorized || res.status == http.StatusForbidden {
+				if isAuth(res.status) {
 					rot.setHealth(p.Name, HealthAuth)
 				}
 				log.Printf("chicco test: ✗ %s/%s — %s · %s", p.Name, model, failDetail(res), windowDesc(p, rot))

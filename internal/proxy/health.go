@@ -88,7 +88,7 @@ func probeProvider(ctx context.Context, p Provider) Health {
 	}
 	defer resp.Body.Close()
 	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+	case isAuth(resp.StatusCode):
 		return HealthAuth
 	case resp.StatusCode >= 500:
 		return HealthDown

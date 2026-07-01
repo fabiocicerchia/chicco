@@ -248,17 +248,11 @@ func renderProviderRow(s ProviderStat, width int) string {
 	default:
 		dot, tail = green.Render("●"), bar
 	}
-	return modelRow(dot, s.Name, joinModels(s.Models), usage, fmt.Sprintf("req %d", s.Requests), tail, width, false)
-}
-
-// joinModels renders the model(s) behind a provider for the dashboard: the single
-// model name, or a comma-joined list (truncated by the cell) for a multi-model
-// provider that round-robins them.
-func joinModels(models []string) string {
-	if len(models) == 0 {
-		return "—"
+	models := "—"
+	if len(s.Models) > 0 {
+		models = strings.Join(s.Models, ", ")
 	}
-	return strings.Join(models, ", ")
+	return modelRow(dot, s.Name, models, usage, fmt.Sprintf("req %d", s.Requests), tail, width, false)
 }
 
 // modelRow lays out the columns to fixed widths so the table aligns. name, model,

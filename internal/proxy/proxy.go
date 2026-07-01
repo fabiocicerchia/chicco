@@ -210,10 +210,16 @@ func (r *Rotator) block(name string, d time.Duration, reason string) {
 	r.mu.Unlock()
 }
 
+// isAuth reports whether a status means the key was rejected (401/403), as
+// opposed to a rate-limit or transient failure.
+func isAuth(status int) bool {
+	return status == http.StatusUnauthorized || status == http.StatusForbidden
+}
+
 // blockReason maps an upstream status to a cooldown reason for the dashboard.
 func blockReason(status int) string {
 	switch {
-	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+	case isAuth(status):
 		return "auth"
 	case status == http.StatusTooManyRequests:
 		return "limit"
@@ -225,7 +231,7 @@ func blockReason(status int) string {
 // cooldown picks how long to skip a provider after a failure: a rejected key for
 // an hour, an explicit Retry-After when given, otherwise a short default.
 func cooldown(status int, retryAfter time.Duration) time.Duration {
-	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+	if isAuth(status) {
 		return authCooldown
 	}
 	if retryAfter > 0 {
@@ -330,7 +336,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 			up.body.Close()
 			d := cooldown(up.status, up.retryAfter)
 			r.block(p.Name, d, blockReason(up.status))
-			if up.status == http.StatusUnauthorized || up.status == http.StatusForbidden {
+			if isAuth(up.status) {
 				r.setHealth(p.Name, HealthAuth) // bad key — grey it in the dashboard
 			}
 			lastErr = fmt.Sprintf("%s: HTTP %d: %s", p.Name, up.status, strings.TrimSpace(string(snippet)))
