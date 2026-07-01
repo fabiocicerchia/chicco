@@ -1,0 +1,18 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "chicco": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "chicco (local rotation proxy)",
+      "options": {
+        "baseURL": "http://127.0.0.1:41986/v1",
+        "apiKey": "sk-local"
+      },
+      "models": {
+        "chicco": {
+          "name": "chicco (rotates across free tiers)"
+        }
+      }
+    }
+  }
+}

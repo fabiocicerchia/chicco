@@ -1,0 +1,15 @@
+# Continue (VS Code / JetBrains) — https://docs.continue.dev/reference
+# Drop this into ~/.continue/config.yaml (or merge the models entry into yours).
+name: chicco
+version: 0.0.1
+schema: v1
+models:
+  - name: chicco (local rotation proxy)
+    provider: openai        # any OpenAI-compatible endpoint uses provider: openai
+    model: chicco           # arbitrary — chicco overrides it with its rotation pick
+    apiBase: http://127.0.0.1:41986/v1
+    apiKey: sk-local        # chicco needs no auth; Continue just wants a non-empty value
+    roles:
+      - chat
+      - edit
+      - apply

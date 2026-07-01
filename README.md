@@ -268,20 +268,16 @@ Flags:
 
 `chicco -help` prints full usage.
 
-## Pointing ciccio at chicco
+## Pointing an agent at chicco
 
-In `ciccio.yaml`:
+chicco is a plain OpenAI-compatible endpoint, so any client that lets you set a
+base URL works — point it at `http://127.0.0.1:41986/v1` (no API key needed).
+The [`examples/`](examples/) folder has ready configs for **OpenCode**,
+**Continue**, **Aider**, **Headroom** (context compression in front of chicco),
+and the raw OpenAI SDK / `curl`.
 
-```yaml
-default_provider: openai
-provider:
-  openai:
-    options:
-      baseURL: http://127.0.0.1:41986/v1
-      apiKey: ""        # not needed for a local proxy
-```
-
-Now every ciccio agent runs through the free-tier cascade.
+Note: chicco overrides the request's `model` field with its rotation pick, so the
+model name a client sends is arbitrary.
 
 ## Build
 
