@@ -283,7 +283,9 @@ local-development requirements.
 |--------|-------------------------|--------------------------------------------------|
 | `POST` | `/v1/chat/completions`  | rotated, proxied chat completion                 |
 | `GET`  | `/v1/models`            | list virtual model IDs + `chicco:auto`           |
+| `GET`  | `/v1/status`            | JSON snapshot of all providers + recent logs (web dashboard data source) |
 | `GET`  | `/health`               | liveness probe (returns `200`)                   |
+| `GET`  | `/dashboard`            | live web dashboard — mirrors the TUI in a browser, polling `/v1/status` every second |
 
 When the `model` field in a `/v1/chat/completions` request matches a virtual model
 ID from the `models:` section of `chicco.yaml`, the request is routed only to the

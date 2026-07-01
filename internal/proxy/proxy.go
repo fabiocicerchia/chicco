@@ -325,13 +325,99 @@ func parseRetryAfter(h string) time.Duration {
 }
 
 // Handler returns the HTTP handler: /v1/chat/completions is rotated across
-// providers; /v1/models lists available virtual models; /health is a liveness probe.
-func Handler(r *Rotator) http.Handler {
+// providers; /v1/models lists available virtual models; /health is a liveness
+// probe; /v1/status exposes a JSON snapshot for the web dashboard; /dashboard
+// serves the live HTML dashboard page. logs may be nil (headless mode) — the
+// status endpoint will return an empty log array in that case.
+func Handler(r *Rotator, logs *logBuffer) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("/v1/models", r.handleModels)
 	mux.HandleFunc("/v1/chat/completions", r.handleChat)
+	mux.HandleFunc("/v1/status", r.handleStatus(logs))
+	mux.HandleFunc("/dashboard", handleDashboard)
 	return mux
+}
+
+// handleStatus returns a handler that serves GET /v1/status as JSON containing
+// the current provider snapshot and the most recent log lines. It is the data
+// source polled by the web dashboard.
+func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		type modelStatJSON struct {
+			Name     string `json:"name"`
+			Tokens   int64  `json:"tokens"`
+			Requests int    `json:"requests"`
+		}
+		type providerStatJSON struct {
+			Name          string          `json:"name"`
+			Kind          string          `json:"kind"`
+			Models        []modelStatJSON `json:"models"`
+			Quota         int64           `json:"quota"`
+			QuotaIsTokens bool            `json:"quota_is_tokens"`
+			QuotaWindow   string          `json:"quota_window"`
+			UsedTokens    int64           `json:"used_tokens"`
+			Requests      int             `json:"requests"`
+			CooldownSecs  float64         `json:"cooldown_secs"`
+			CooldownKind  string          `json:"cooldown_kind"`
+			Health        string          `json:"health"` // "ok" | "auth" | "down" | "unknown"
+		}
+
+		healthStr := func(h Health) string {
+			switch h {
+			case HealthOK:
+				return "ok"
+			case HealthAuth:
+				return "auth"
+			case HealthDown:
+				return "down"
+			default:
+				return "unknown"
+			}
+		}
+
+		stats := r.Snapshot()
+		providers := make([]providerStatJSON, len(stats))
+		for i, s := range stats {
+			ms := make([]modelStatJSON, len(s.Models))
+			for j, m := range s.Models {
+				ms[j] = modelStatJSON{Name: m.Name, Tokens: m.Tokens, Requests: m.Requests}
+			}
+			providers[i] = providerStatJSON{
+				Name:          s.Name,
+				Kind:          s.Kind,
+				Models:        ms,
+				Quota:         s.Quota,
+				QuotaIsTokens: s.QuotaIsTokens,
+				QuotaWindow:   s.QuotaWindow,
+				UsedTokens:    s.UsedTokens,
+				Requests:      s.Requests,
+				CooldownSecs:  s.CooldownLeft.Seconds(),
+				CooldownKind:  s.CooldownKind,
+				Health:        healthStr(s.Health),
+			}
+		}
+
+		var logLines []string
+		if logs != nil {
+			logLines = logs.tail(100)
+		}
+		if logLines == nil {
+			logLines = []string{}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"providers": providers,
+			"logs":      logLines,
+		})
+	}
 }
 
 // handleModels serves GET /v1/models in the OpenAI format: an object list of

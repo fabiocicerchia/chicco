@@ -50,7 +50,7 @@ func TestRotationFailover(t *testing.T) {
 		{Name: "a", BaseURL: limited.URL, APIKey: "key-a", Models: []string{"m-a"}},
 		{Name: "b", BaseURL: working.URL, APIKey: "key-b", Models: []string{"m-b"}},
 	}, nil)
-	srv := httptest.NewServer(Handler(rot))
+	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",
@@ -91,7 +91,7 @@ func TestModelOverride(t *testing.T) {
 	rot := NewRotator([]Provider{
 		{Name: "p", BaseURL: upstream.URL, APIKey: "k", Models: []string{"chosen-model"}},
 	}, nil)
-	srv := httptest.NewServer(Handler(rot))
+	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",

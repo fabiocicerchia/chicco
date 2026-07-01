@@ -73,7 +73,7 @@ func Run(opts Options) error {
 	// systemd, etc.) — the dashboard needs a real TTY.
 	if opts.Headless || !isatty.IsTerminal(os.Stdout.Fd()) {
 		log.Printf("chicco %s listening on %s — rotating across %d provider(s): %v", opts.Version, cfg.Addr, len(active), names)
-		return http.ListenAndServe(cfg.Addr, Handler(rot))
+		return http.ListenAndServe(cfg.Addr, Handler(rot, nil))
 	}
 
 	// Dashboard mode: logs flow into the on-screen pane, not stderr.
@@ -81,7 +81,7 @@ func Run(opts Options) error {
 	log.SetOutput(logs)
 	log.SetFlags(log.Ltime)
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot)}
+	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs)}
 	go func() {
 		log.Printf("chicco %s listening on %s — %d provider(s): %v", opts.Version, cfg.Addr, len(active), names)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
