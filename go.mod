@@ -1,4 +1,4 @@
-module chicco
+module github.com/fabiocicerchia/chicco
 
 go 1.25.0
 
