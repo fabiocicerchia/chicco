@@ -1,0 +1,82 @@
+# GoReleaser builds the cross-platform binaries, generates an SBOM per archive
+# (syft), and keyless-signs the checksums file with cosign using the GitHub
+# Actions OIDC token — no long-lived keys. See .github/workflows/release.yml.
+version: 2
+
+project_name: chicco
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: chicco
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: chicco
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - chicco.yaml
+
+checksum:
+  name_template: "checksums.txt"
+
+# One SBOM (SPDX JSON) per release archive.
+sboms:
+  - artifacts: archive
+
+# Keyless cosign signature over checksums.txt — verifying the checksum then
+# verifies every artifact it lists.
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: fabiocicerchia
+    name: chicco
+  prerelease: auto
+  footer: |
+    ## Verify the download
+
+    ```sh
+    cosign verify-blob \
+      --certificate checksums.txt.pem \
+      --signature checksums.txt.sig \
+      --certificate-identity-regexp 'https://github.com/fabiocicerchia/chicco' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      checksums.txt
+    sha256sum --ignore-missing -c checksums.txt
+    ```
