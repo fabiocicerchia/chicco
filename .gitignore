@@ -1,4 +1,5 @@
 /bin/
+/dist/
 /chicco
 chicco-state.json
 *.log
