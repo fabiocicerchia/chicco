@@ -63,7 +63,7 @@ Set `BINDIR` to choose the install directory, or `CHICCO_VERSION` to pin a tag.
 **Go:**
 
 ```sh
-go install github.com/fabiocicerchia/chicco@latest
+go install github.com/fabiocicerchia/chicco/cmd/chicco@latest
 ```
 
 **Manual:** grab an archive from the [releases page](https://github.com/fabiocicerchia/chicco/releases/latest).
@@ -253,7 +253,7 @@ SQLite would add a heavy dependency for no real gain.
 GROQ_API_KEY=... CEREBRAS_API_KEY=... chicco -config chicco.yaml
 
 # or straight from a checkout
-go run . -config chicco.yaml
+go run ./cmd/chicco -config chicco.yaml
 ```
 
 Flags:

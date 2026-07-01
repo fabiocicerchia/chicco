@@ -6,11 +6,11 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .PHONY: build
 build: ## Compile the binary into ./bin
-	go build -ldflags "$(LDFLAGS)" -o bin/$(BIN) .
+	go build -ldflags "$(LDFLAGS)" -o bin/$(BIN) ./cmd/chicco
 
 .PHONY: run
 run: ## Run chicco (pass args with ARGS="...")
-	go run . $(ARGS)
+	go run ./cmd/chicco $(ARGS)
 
 .PHONY: test
 test: ## Run tests with the race detector
@@ -22,7 +22,7 @@ lint: ## Run golangci-lint (falls back to go vet)
 
 .PHONY: install
 install: ## go install into GOBIN
-	go install -ldflags "$(LDFLAGS)" .
+	go install -ldflags "$(LDFLAGS)" ./cmd/chicco
 
 .PHONY: snapshot
 snapshot: ## Build a local unpublished release with GoReleaser

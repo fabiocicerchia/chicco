@@ -11,6 +11,8 @@ before:
 
 builds:
   - id: chicco
+    main: ./cmd/chicco
+    binary: chicco
     env:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
