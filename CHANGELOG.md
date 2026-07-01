@@ -20,5 +20,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Cross-platform release binaries (linux/darwin/windows, amd64/arm64) with an
   SBOM and keyless cosign signatures.
 - One-line installer (`install.sh`).
+- `GET /v1/models` endpoint listing `chicco:auto` plus the virtual models
+  defined in `chicco.yaml`.
 
 [Unreleased]: https://github.com/fabiocicerchia/chicco/commits/main

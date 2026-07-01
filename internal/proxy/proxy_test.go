@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -102,6 +103,45 @@ func TestModelOverride(t *testing.T) {
 	resp.Body.Close()
 	if gotModel != "chosen-model" {
 		t.Errorf("upstream model = %q, want chosen-model (request model not overridden)", gotModel)
+	}
+}
+
+// TestModelsEndpoint confirms GET /v1/models lists "chicco:auto" plus one entry
+// per virtual model from the routing table, in OpenAI list shape.
+func TestModelsEndpoint(t *testing.T) {
+	rot := NewRotator([]Provider{
+		{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m1", "m2"}},
+		{Name: "b", BaseURL: "http://x", APIKey: "k", Models: []string{"m3"}},
+	}, []Model{{ID: "fast"}, {ID: "smart"}})
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/v1/models")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var out struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID     string `json:"id"`
+			Object string `json:"object"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.Object != "list" || len(out.Data) != 3 {
+		t.Fatalf("models = %+v, want chicco:auto + 2 virtual models", out)
+	}
+	want := []string{"chicco:auto", "fast", "smart"}
+	for i, id := range want {
+		if out.Data[i].ID != id || out.Data[i].Object != "model" {
+			t.Errorf("model[%d] = %+v, want id=%q object=model", i, out.Data[i], id)
+		}
 	}
 }
 
