@@ -57,7 +57,7 @@ func TestRateLimitRPM(t *testing.T) {
 	el.record(0)
 	el.record(0)
 
-	until := el.check(p)
+	until := el.check(p.Quota)
 	if until.IsZero() {
 		t.Fatal("expected provider to be blocked after RPM=2 with 2 events in last minute")
 	}
@@ -73,7 +73,7 @@ func TestRateLimitTPM(t *testing.T) {
 	el.record(60)
 	el.record(50) // total 110 > 100
 
-	until := el.check(p)
+	until := el.check(p.Quota)
 	if until.IsZero() {
 		t.Fatal("expected provider to be blocked after TPM=100 with 110 tokens in last minute")
 	}
@@ -85,7 +85,7 @@ func TestRateLimitNotTriggered(t *testing.T) {
 	el := &eventLog{}
 	el.record(50)
 
-	if until := el.check(p); !until.IsZero() {
+	if until := el.check(p.Quota); !until.IsZero() {
 		t.Errorf("expected no block, got blocked until %v", until)
 	}
 }

@@ -169,9 +169,39 @@ type Model struct {
 }
 
 // Backend is one entry in a Model's backend list.
+// Quota overrides the parent provider's quota for this specific model when set.
+// This lets you enforce per-model limits (e.g. Groq's per-model daily caps) that
+// differ from the provider's aggregate quota.
 type Backend struct {
 	Provider string `yaml:"provider"`
 	Model    string `yaml:"model"`
+	Quota    *Quota `yaml:"quota,omitempty"` // nil → inherit provider quota
+}
+
+// effectiveQuota returns the quota for this backend: the backend's own quota
+// when configured, otherwise the given provider fallback. Same return semantics
+// as Provider.effectiveQuota.
+func (b Backend) effectiveQuota(fallback Quota) (quota int64, isTokens bool, window string) {
+	q := fallback
+	if b.Quota != nil {
+		q = *b.Quota
+	}
+	switch {
+	case q.TPD > 0:
+		return q.TPD, true, "daily"
+	case q.RPD > 0:
+		return int64(q.RPD), false, "daily"
+	case q.TPH > 0:
+		return q.TPH, true, "hourly"
+	case q.RPH > 0:
+		return int64(q.RPH), false, "hourly"
+	case q.TPM > 0:
+		return q.TPM, true, "minutely"
+	case q.RPM > 0:
+		return int64(q.RPM), false, "minutely"
+	default:
+		return 0, false, "none"
+	}
 }
 
 // LoadConfig reads and parses chicco.yaml, defaulting the listen address and

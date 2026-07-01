@@ -393,8 +393,23 @@ func providerRows(s ProviderStat, width int) []string {
 				tail, width, false))
 		} else {
 			// Continuation rows: blank name/dot/kind, per-model usage and bar.
-			modelUsage := providerUsage(ms.Tokens, ms.Requests)
-			modelTail := providerBar(ms.Tokens, ms.Requests)
+			// When the model has its own quota, use that for the bar; otherwise
+			// fall back to the provider-level quota so the bar stays meaningful.
+			var modelUsage string
+			var modelTail string
+			if ms.Quota > 0 {
+				// Per-model quota: show usage against the model's own cap.
+				if ms.QuotaIsTokens {
+					modelUsage = fmt.Sprintf("%s / %s", fmtTok(ms.UsedTokens), fmtTok(ms.Quota))
+					modelTail = barTail(float64(ms.UsedTokens) / float64(ms.Quota))
+				} else {
+					modelUsage = fmt.Sprintf("%d / %d req", ms.Requests, int(ms.Quota))
+					modelTail = barTail(float64(ms.Requests) / float64(ms.Quota))
+				}
+			} else {
+				modelUsage = providerUsage(ms.Tokens, ms.Requests)
+				modelTail = providerBar(ms.Tokens, ms.Requests)
+			}
 			rows = append(rows, modelRow(" ", "", "", ms.Name,
 				modelUsage,
 				fmt.Sprintf("req %d", ms.Requests),

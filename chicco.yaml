@@ -100,6 +100,26 @@ providers:
   #   models: [default]
 
 models:
+  # Each backend in a virtual model can carry its own quota: block, which
+  # overrides the provider-level quota for that specific model. This is useful
+  # when a provider caps each model independently (e.g. Groq's per-model daily
+  # token limits differ from its aggregate cap).
+  #
+  # Example — Groq has separate per-model daily limits:
+  #   - id: llama-3.3-70b
+  #     strategy: rotate
+  #     backends:
+  #       - provider: groq
+  #         model: llama-3.3-70b-versatile
+  #         quota:
+  #           tpd: 100000   # groq's per-model daily cap for this model
+  #       - provider: cerebras
+  #         model: llama-3.3-70b   # no quota: here → inherits provider-level quota
+  #
+  # Omit quota: on a backend (or leave it out entirely) to fall back to the
+  # provider's top-level quota: block. Per-model limits get their own event log
+  # and dashboard bar; the provider bar still shows the aggregate.
+
   - id: llama-3.3-70b
     strategy: rotate
     backends:

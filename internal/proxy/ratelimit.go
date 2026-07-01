@@ -100,11 +100,12 @@ func (el *eventLog) windowTotals(window string) (reqs int, tokens int64) {
 	}
 }
 
-// check inspects the ring buffer against the provider's configured rate limits
-// and returns the earliest time the provider will be unblocked (zero if none of
-// the limits are breached). It evaluates all six limits and returns the maximum
+// check inspects the ring buffer against the given quota and returns the earliest
+// time the caller will be unblocked (zero value if no limit is breached). It
+// evaluates all six limits (RPM/RPH/RPD/TPM/TPH/TPD) and returns the maximum
 // blocked-until time so every active limit is respected.
-func (el *eventLog) check(p Provider) time.Time {
+// Pass the per-model quota when available; fall back to the provider quota otherwise.
+func (el *eventLog) check(q Quota) time.Time {
 	now := time.Now()
 	var blockedUntil time.Time
 
@@ -118,7 +119,7 @@ func (el *eventLog) check(p Provider) time.Time {
 		if getCount() < limit {
 			return
 		}
-		// Find the oldest event still inside the window — the provider unblocks
+		// Find the oldest event still inside the window — the caller unblocks
 		// when that event falls out.
 		cutoff := now.Add(-window)
 		oldest := now // fallback: unblock after the full window
@@ -138,7 +139,6 @@ func (el *eventLog) check(p Provider) time.Time {
 	rph, tph := el.totals(time.Hour)
 	rpd, tpd := el.totals(24 * time.Hour)
 
-	q := p.Quota
 	enforce(int64(q.RPM), time.Minute, func() int64 { return int64(rpm) })
 	enforce(int64(q.RPH), time.Hour, func() int64 { return int64(rph) })
 	enforce(int64(q.RPD), 24*time.Hour, func() int64 { return int64(rpd) })

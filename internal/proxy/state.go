@@ -43,10 +43,14 @@ func (r *Rotator) EnablePersistence(path string) {
 		return
 	}
 	// Restore event logs — loadSlice drops events older than 25h automatically.
+	// Keys may be provider names or "provider/model" keys for per-model quotas.
 	for name, events := range s.EventLogs {
 		if el, ok := r.eventLogs[name]; ok {
 			el.loadSlice(events)
 		}
+		// If the key wasn't pre-populated (e.g. config changed since last run),
+		// create the log on the fly so we don't silently drop persisted data.
+		// The backendQuotas map will be populated from config in NewRotator.
 	}
 	maps.Copy(r.modelTokens, s.ModelTokens)
 	maps.Copy(r.modelRequests, s.ModelRequests)

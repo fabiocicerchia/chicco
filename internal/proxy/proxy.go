@@ -43,10 +43,14 @@ type Rotator struct {
 	models    []Model // virtual model routing table from config (may be empty)
 	modelIdx  map[string]int
 	blocked   map[string]time.Time
-	// eventLogs tracks requests and tokens per provider in a ring buffer. This
-	// replaces the flat tokens/requests maps and drives both the rate-limit
-	// check in pick() and the dashboard quota bar via windowTotals().
+	// eventLogs tracks requests and tokens in a ring buffer, keyed by either a
+	// provider name (provider-level quota) or a "provider/model" key (per-model
+	// quota). pick() records to and checks the most specific key available.
 	eventLogs map[string]*eventLog
+	// backendQuotas stores the per-model quota for backends that declare one,
+	// keyed by "provider/model". Used by pick() to choose between provider-level
+	// and model-level rate limit enforcement.
+	backendQuotas map[string]Quota
 	// modelTokens / modelRequests track usage per "provider/model" key so the
 	// dashboard can show a per-model bar alongside the provider total.
 	modelTokens   map[string]int64
@@ -61,16 +65,42 @@ type Rotator struct {
 
 // NewRotator builds a Rotator over the configured providers and virtual model table.
 func NewRotator(providers []Provider, models []Model) *Rotator {
+	// Start with one event log per provider (provider-level quota).
 	logs := make(map[string]*eventLog, len(providers))
 	for _, p := range providers {
 		logs[p.Name] = &eventLog{}
 	}
+
+	// Build a provider name → Provider map for quick quota lookup below.
+	providerMap := make(map[string]Provider, len(providers))
+	for _, p := range providers {
+		providerMap[p.Name] = p
+	}
+
+	// Walk the virtual model table: for every backend that declares its own quota,
+	// register a separate "provider/model" event log and store the quota so pick()
+	// can enforce it instead of (or in addition to) the provider-level one.
+	backendQuotas := make(map[string]Quota)
+	for _, m := range models {
+		for _, b := range m.Backends {
+			if b.Quota == nil {
+				continue
+			}
+			mk := b.Provider + "/" + b.Model
+			if _, exists := logs[mk]; !exists {
+				logs[mk] = &eventLog{}
+			}
+			backendQuotas[mk] = *b.Quota
+		}
+	}
+
 	return &Rotator{
 		providers:     providers,
 		models:        models,
 		modelIdx:      map[string]int{},
 		blocked:       map[string]time.Time{},
 		eventLogs:     logs,
+		backendQuotas: backendQuotas,
 		modelTokens:   map[string]int64{},
 		modelRequests: map[string]int{},
 		health:        map[string]Health{},
@@ -86,7 +116,8 @@ func (r *Rotator) setHealth(name string, h Health) {
 }
 
 // recordUsage appends a request event (with token count) to the provider's event
-// log and updates the per-model sub-counters for the dashboard.
+// log and, when a per-model event log exists (backend declared its own quota),
+// also records to that. Updates the per-model sub-counters for the dashboard.
 // tokens may be 0 when the upstream didn't report usage.
 func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	r.mu.Lock()
@@ -94,6 +125,10 @@ func (r *Rotator) recordUsage(name, model string, tokens int64) {
 		el.record(tokens)
 	}
 	mk := name + "/" + model
+	// Also record to the per-model event log when this backend has its own quota.
+	if el, ok := r.eventLogs[mk]; ok {
+		el.record(tokens)
+	}
 	r.modelRequests[mk]++
 	r.modelTokens[mk] += tokens
 	r.dirty = true
@@ -102,9 +137,13 @@ func (r *Rotator) recordUsage(name, model string, tokens int64) {
 
 // ModelStat is the per-model usage snapshot embedded in ProviderStat.
 type ModelStat struct {
-	Name     string
-	Tokens   int64
-	Requests int
+	Name          string
+	Tokens        int64
+	Requests      int
+	Quota         int64  // per-model quota (0 = use provider quota)
+	QuotaIsTokens bool
+	QuotaWindow   string
+	UsedTokens    int64 // tokens used within the quota window (only set when Quota > 0)
 }
 
 // ProviderStat is a snapshot of one provider's live state for the dashboard.
@@ -145,11 +184,23 @@ func (r *Rotator) Snapshot() []ProviderStat {
 		models := make([]ModelStat, len(p.Models))
 		for j, m := range p.Models {
 			mk := p.Name + "/" + m
-			models[j] = ModelStat{
+			ms := ModelStat{
 				Name:     m,
 				Tokens:   r.modelTokens[mk],
 				Requests: r.modelRequests[mk],
 			}
+			// If this provider/model has a per-model quota, expose its own
+			// quota value and window-scoped usage for the dashboard bar.
+			if q, ok := r.backendQuotas[mk]; ok {
+				mq, mqIsTokens, mqWindow := Backend{Quota: &q}.effectiveQuota(Quota{})
+				ms.Quota = mq
+				ms.QuotaIsTokens = mqIsTokens
+				ms.QuotaWindow = mqWindow
+				if el, ok := r.eventLogs[mk]; ok {
+					_, ms.UsedTokens = el.windowTotals(mqWindow)
+				}
+			}
+			models[j] = ms
 		}
 		provKind := p.Kind
 		if provKind == "" {
@@ -249,6 +300,9 @@ func (r *Rotator) Active() []Provider {
 // It also enforces client-side rate limits (RPM/RPH/RPD/TPM/TPH/TPD): if the
 // event log shows a limit would be breached, the provider is put in cooldown
 // until the oldest event in that window expires.
+// When a backend has a per-model quota, that quota is checked against the
+// per-model event log (keyed "provider/model") instead of the provider-level one,
+// giving each model its own independent rate-limit window.
 func (r *Rotator) pick(active []Provider) (Provider, string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -257,19 +311,42 @@ func (r *Rotator) pick(active []Provider) (Provider, string, bool) {
 		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
 			continue
 		}
-		// Client-side rate-limit check: block the provider proactively if any
-		// configured limit (RPM/RPH/RPD/TPM/TPH/TPD) is already at its cap.
+
+		// Advance the model cursor first so we know which model we'd use, then
+		// run both the provider-level and (if configured) per-model quota checks.
+		i := (r.modelIdx[p.Name] + 1) % len(p.Models)
+		model := p.Models[i]
+		mk := p.Name + "/" + model
+
+		// Provider-level rate-limit check.
 		if el, ok := r.eventLogs[p.Name]; ok {
-			if until := el.check(p); until.After(now) {
+			if until := el.check(p.Quota); until.After(now) {
 				r.blocked[p.Name] = until
 				r.reason[p.Name] = "limit"
 				r.dirty = true
 				continue
 			}
 		}
-		i := (r.modelIdx[p.Name] + 1) % len(p.Models)
+
+		// Per-model rate-limit check (only when this backend has its own quota).
+		if q, hasModelQuota := r.backendQuotas[mk]; hasModelQuota {
+			if el, ok := r.eventLogs[mk]; ok {
+				if until := el.check(q); until.After(now) {
+					// Block this specific model key; do NOT block the whole provider
+					// so other models on this provider are still reachable.
+					r.blocked[mk] = until
+					r.reason[mk] = "limit"
+					r.dirty = true
+					continue
+				}
+			}
+		} else if until, modelBlocked := r.blocked[mk]; modelBlocked && now.Before(until) {
+			// Model was previously blocked by a per-model limit — skip it.
+			continue
+		}
+
 		r.modelIdx[p.Name] = i
-		return p, p.Models[i], true
+		return p, model, true
 	}
 	return Provider{}, "", false
 }
