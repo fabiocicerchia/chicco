@@ -43,16 +43,17 @@ type Rotator struct {
 	models    []Model // virtual model routing table from config (may be empty)
 	modelIdx  map[string]int
 	blocked   map[string]time.Time
-	tokens    map[string]int64
-	requests  map[string]int
+	// eventLogs tracks requests and tokens per provider in a ring buffer. This
+	// replaces the flat tokens/requests maps and drives both the rate-limit
+	// check in pick() and the dashboard quota bar via windowTotals().
+	eventLogs map[string]*eventLog
+	// modelTokens / modelRequests track usage per "provider/model" key so the
+	// dashboard can show a per-model bar alongside the provider total.
+	modelTokens   map[string]int64
+	modelRequests map[string]int
 	health    map[string]Health
 	reason    map[string]string // why a provider is blocked: "limit" | "auth" | "error"
-	// winStart[name] is the start of the quota window the current counters belong
-	// to; windowOf[name] is the provider's window ("daily"/"monthly"/"none"). When
-	// the window rolls over, the counters reset (see maybeReset).
-	winStart map[string]time.Time
-	windowOf map[string]string
-	// statePath, when set, persists tokens/requests across runs (see state.go);
+	// statePath, when set, persists event logs across runs (see state.go);
 	// dirty marks counters changed since the last write.
 	statePath string
 	dirty     bool
@@ -60,46 +61,20 @@ type Rotator struct {
 
 // NewRotator builds a Rotator over the configured providers and virtual model table.
 func NewRotator(providers []Provider, models []Model) *Rotator {
-	windowOf := make(map[string]string, len(providers))
+	logs := make(map[string]*eventLog, len(providers))
 	for _, p := range providers {
-		windowOf[p.Name] = p.Window
+		logs[p.Name] = &eventLog{}
 	}
 	return &Rotator{
-		providers: providers,
-		modelIdx:  map[string]int{},
-		blocked:   map[string]time.Time{},
-		tokens:    map[string]int64{},
-		requests:  map[string]int{},
-		health:    map[string]Health{},
-		reason:    map[string]string{},
-		winStart:  map[string]time.Time{},
-		windowOf:  windowOf,
-	}
-}
-
-// windowStart returns the start of the current quota window for a provider, or
-// the zero time for "none"/"" (counters never roll over).
-func windowStart(window string) time.Time {
-	now := time.Now().UTC()
-	switch window {
-	case "daily":
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	case "monthly":
-		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	default:
-		return time.Time{}
-	}
-}
-
-// maybeReset zeroes a provider's usage counters when its quota window has rolled
-// over since they were last touched. The caller must hold r.mu.
-func (r *Rotator) maybeReset(name string) {
-	cur := windowStart(r.windowOf[name])
-	if !r.winStart[name].Equal(cur) {
-		r.tokens[name] = 0
-		r.requests[name] = 0
-		r.winStart[name] = cur
-		r.dirty = true
+		providers:     providers,
+		models:        models,
+		modelIdx:      map[string]int{},
+		blocked:       map[string]time.Time{},
+		eventLogs:     logs,
+		modelTokens:   map[string]int64{},
+		modelRequests: map[string]int{},
+		health:        map[string]Health{},
+		reason:        map[string]string{},
 	}
 }
 
@@ -110,28 +85,41 @@ func (r *Rotator) setHealth(name string, h Health) {
 	r.mu.Unlock()
 }
 
-// recordUsage adds a served request (and any reported tokens) to a provider's
-// counters. tokens may be 0 when the upstream didn't report usage.
-func (r *Rotator) recordUsage(name string, tokens int64) {
+// recordUsage appends a request event (with token count) to the provider's event
+// log and updates the per-model sub-counters for the dashboard.
+// tokens may be 0 when the upstream didn't report usage.
+func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	r.mu.Lock()
-	r.maybeReset(name)
-	r.requests[name]++
-	r.tokens[name] += tokens
+	if el, ok := r.eventLogs[name]; ok {
+		el.record(tokens)
+	}
+	mk := name + "/" + model
+	r.modelRequests[mk]++
+	r.modelTokens[mk] += tokens
 	r.dirty = true
 	r.mu.Unlock()
 }
 
+// ModelStat is the per-model usage snapshot embedded in ProviderStat.
+type ModelStat struct {
+	Name     string
+	Tokens   int64
+	Requests int
+}
+
 // ProviderStat is a snapshot of one provider's live state for the dashboard.
 type ProviderStat struct {
-	Name          string
-	Models        []string
-	QuotaTokens   int64
-	QuotaRequests int
-	UsedTokens    int64
-	Requests      int
-	CooldownLeft  time.Duration // 0 when available
-	CooldownKind  string        // "limit" | "auth" | "error" when CooldownLeft > 0
-	Health        Health
+	Name           string
+	Kind           string // "http" | "cli"
+	Models         []ModelStat
+	Quota          int64  // effective quota value (0 = no bar); derived from TPD/RPD/TPH/…
+	QuotaIsTokens  bool   // true → Quota is a token cap; false → request cap
+	QuotaWindow    string // "daily" | "hourly" | "minutely" | "none"
+	UsedTokens     int64
+	Requests       int
+	CooldownLeft   time.Duration // 0 when available
+	CooldownKind   string        // "limit" | "auth" | "error" when CooldownLeft > 0
+	Health         Health
 }
 
 // Snapshot returns the current per-provider stats (all configured providers, in
@@ -142,20 +130,40 @@ func (r *Rotator) Snapshot() []ProviderStat {
 	now := time.Now()
 	out := make([]ProviderStat, len(r.providers))
 	for i, p := range r.providers {
-		r.maybeReset(p.Name) // roll the window before reporting, so idle providers zero out
 		var left time.Duration
 		var kind string
 		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
 			left = until.Sub(now)
 			kind = r.reason[p.Name]
 		}
+		quota, quotaIsTokens, quotaWindow := p.effectiveQuota()
+		var usedTokens int64
+		var requests int
+		if el, ok := r.eventLogs[p.Name]; ok {
+			requests, usedTokens = el.windowTotals(quotaWindow)
+		}
+		models := make([]ModelStat, len(p.Models))
+		for j, m := range p.Models {
+			mk := p.Name + "/" + m
+			models[j] = ModelStat{
+				Name:     m,
+				Tokens:   r.modelTokens[mk],
+				Requests: r.modelRequests[mk],
+			}
+		}
+		provKind := p.Kind
+		if provKind == "" {
+			provKind = "http"
+		}
 		out[i] = ProviderStat{
 			Name:          p.Name,
-			Models:        p.Models,
-			QuotaTokens:   p.QuotaTokens,
-			QuotaRequests: p.QuotaRequests,
-			UsedTokens:    r.tokens[p.Name],
-			Requests:      r.requests[p.Name],
+			Kind:          provKind,
+			Models:        models,
+			Quota:         quota,
+			QuotaIsTokens: quotaIsTokens,
+			QuotaWindow:   quotaWindow,
+			UsedTokens:    usedTokens,
+			Requests:      requests,
 			CooldownLeft:  left,
 			CooldownKind:  kind,
 			Health:        r.health[p.Name],
@@ -238,6 +246,9 @@ func (r *Rotator) Active() []Provider {
 // model. Config order is preference order: the top entry is used until it is
 // exhausted (rate-limited into cooldown), then the next, so a free tier is drained
 // before falling through. ok is false when every active provider is blocked.
+// It also enforces client-side rate limits (RPM/RPH/RPD/TPM/TPH/TPD): if the
+// event log shows a limit would be breached, the provider is put in cooldown
+// until the oldest event in that window expires.
 func (r *Rotator) pick(active []Provider) (Provider, string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -245,6 +256,16 @@ func (r *Rotator) pick(active []Provider) (Provider, string, bool) {
 	for _, p := range active {
 		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
 			continue
+		}
+		// Client-side rate-limit check: block the provider proactively if any
+		// configured limit (RPM/RPH/RPD/TPM/TPH/TPD) is already at its cap.
+		if el, ok := r.eventLogs[p.Name]; ok {
+			if until := el.check(p); until.After(now) {
+				r.blocked[p.Name] = until
+				r.reason[p.Name] = "limit"
+				r.dirty = true
+				continue
+			}
 		}
 		i := (r.modelIdx[p.Name] + 1) % len(p.Models)
 		r.modelIdx[p.Name] = i
@@ -431,7 +452,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		log.Printf("chicco: routing to %s (%s)", p.Name, model)
 		r.setHealth(p.Name, HealthOK) // a 2xx proves the provider works
 		tokens := stream(w, up)
-		r.recordUsage(p.Name, tokens)
+		r.recordUsage(p.Name, model, tokens)
 		log.Printf("chicco: %s (%s) served %d tokens", p.Name, model, tokens)
 		return
 	}

@@ -9,16 +9,18 @@ import (
 
 // Token-usage persistence.
 //
-// ponytail: a JSON state file, not SQLite. The data is a tiny per-provider
-// counter map; an atomically-written JSON file persists it across runs/reboots
-// with zero dependencies. Reach for SQLite only if this grows into real querying
-// or multi-writer concurrency (it isn't there).
+// The state file stores each provider's raw event log (timestamp + token count
+// per request) rather than pre-aggregated counters. This lets us recompute any
+// sliding window (minute/hour/day) correctly after a restart without losing
+// rate-limit state. Events older than 25 hours are dropped on load — they can
+// never influence any rate-limit window.
 
 // persistedState is the on-disk shape of the usage counters and active cooldowns.
 type persistedState struct {
-	Tokens      map[string]int64     `json:"tokens"`
-	Requests    map[string]int       `json:"requests"`
-	WindowStart map[string]time.Time `json:"window_start,omitempty"`
+	// EventLogs stores the raw event slices keyed by provider name.
+	EventLogs     map[string][]event   `json:"event_logs,omitempty"`
+	ModelTokens   map[string]int64     `json:"model_tokens,omitempty"`
+	ModelRequests map[string]int       `json:"model_requests,omitempty"`
 	// Blocked/Reason persist active cooldowns so a long window limit ("limit ·
 	// resets 3pm") survives a restart instead of being retried and re-failing.
 	Blocked map[string]time.Time `json:"blocked,omitempty"`
@@ -40,9 +42,14 @@ func (r *Rotator) EnablePersistence(path string) {
 	if json.Unmarshal(data, &s) != nil {
 		return
 	}
-	maps.Copy(r.tokens, s.Tokens)
-	maps.Copy(r.requests, s.Requests)
-	maps.Copy(r.winStart, s.WindowStart)
+	// Restore event logs — loadSlice drops events older than 25h automatically.
+	for name, events := range s.EventLogs {
+		if el, ok := r.eventLogs[name]; ok {
+			el.loadSlice(events)
+		}
+	}
+	maps.Copy(r.modelTokens, s.ModelTokens)
+	maps.Copy(r.modelRequests, s.ModelRequests)
 	// Restore only cooldowns that haven't elapsed yet.
 	now := time.Now()
 	for k, v := range s.Blocked {
@@ -63,12 +70,15 @@ func (r *Rotator) Persist() error {
 	}
 	now := time.Now()
 	s := persistedState{
-		Tokens:      maps.Clone(r.tokens),
-		Requests:    maps.Clone(r.requests),
-		WindowStart: maps.Clone(r.winStart),
-		Blocked:     map[string]time.Time{},
-		Reason:      map[string]string{},
-		Updated:     now,
+		EventLogs:     make(map[string][]event, len(r.eventLogs)),
+		ModelTokens:   maps.Clone(r.modelTokens),
+		ModelRequests: maps.Clone(r.modelRequests),
+		Blocked:       map[string]time.Time{},
+		Reason:        map[string]string{},
+		Updated:       now,
+	}
+	for name, el := range r.eventLogs {
+		s.EventLogs[name] = el.toSlice()
 	}
 	for k, v := range r.blocked {
 		if v.After(now) { // only persist still-active cooldowns

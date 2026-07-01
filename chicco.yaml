@@ -10,11 +10,13 @@
 # literal token. A provider with an empty key or no models is skipped. Trim the
 # list to the providers you have keys for and set the model names you can access.
 #
-# quota_tokens / quota_requests (optional) drive the dashboard's red/amber/green
-# usage bar. Tokens take priority; use quota_requests for providers capped by
-# request count rather than tokens (e.g. Google's free tier). Omit both to show
-# usage without a bar. window (daily | monthly | none, default none) resets the
-# usage counters at that boundary so the bar tracks the real remaining quota.
+# quota: (optional) sets client-side rate limits chicco enforces before forwarding.
+# Fields under quota: are all optional; omit any you don't need.
+#   rpm / rph / rpd — max requests per minute / hour / day
+#   tpm / tph / tpd — max tokens per minute / hour / day
+# The tightest daily limit also drives the dashboard's red/amber/green usage bar.
+# Use tpd for token-capped providers (Groq, Cerebras) and rpd for request-capped
+# ones (Google free tier). Omit quota: entirely to show usage without a bar.
 
 addr: ":41986"
 
@@ -22,21 +24,21 @@ providers:
   groq:
     base_url: https://api.groq.com/openai/v1
     api_key: ${GROQ_API_KEY}
-    quota_tokens: 200000      # 200k tokens/day
-    window: daily
+    quota:
+      tpd: 200000       # 200k tokens/day
   cerebras:
     base_url: https://api.cerebras.ai/v1
     api_key: ${CEREBRAS_API_KEY}
-    quota_tokens: 1000000     # 1M tokens/day
-    window: daily
+    quota:
+      tpd: 1000000      # 1M tokens/day
   openrouter:
     base_url: https://openrouter.ai/api/v1
     api_key: ${OPENROUTER_API_KEY}
   google:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai/
     api_key: ${GOOGLE_API_KEY}
-    quota_requests: 1000      # Google free tier is request-capped, not token-capped
-    window: daily
+    quota:
+      rpd: 1000         # Google free tier is request-capped, not token-capped
 
   # ── CLI-backed providers (kind: cli) ───────────────────────────────────────
   # Instead of an HTTP call, chicco runs a local tool and synthesizes the reply.

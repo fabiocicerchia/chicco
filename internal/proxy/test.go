@@ -61,7 +61,7 @@ func runTest(rot *Rotator) {
 			res := testOne(context.Background(), p, model)
 			if res.ok {
 				ok++
-				rot.recordUsage(p.Name, res.tokens)
+				rot.recordUsage(p.Name, model, res.tokens)
 				rot.setHealth(p.Name, HealthOK)
 				log.Printf("chicco test: ✓ %s/%s — %d tok · %s", p.Name, model, res.tokens, windowDesc(p, rot))
 			} else {
@@ -174,17 +174,14 @@ func windowDesc(p Provider, rot *Rotator) string {
 			break
 		}
 	}
-	win := p.Window
-	if win == "" {
-		win = "none"
-	}
+	quota, quotaIsTokens, quotaWindow := p.effectiveQuota()
 	switch {
 	case stat.CooldownLeft > 0 && stat.CooldownKind == "limit":
 		return "LIMIT — resets in " + stat.CooldownLeft.Round(time.Minute).String()
-	case p.QuotaTokens > 0:
-		return fmt.Sprintf("%s/%s tok · %s", fmtTok(stat.UsedTokens), fmtTok(p.QuotaTokens), win)
-	case p.QuotaRequests > 0:
-		return fmt.Sprintf("%d/%d req · %s", stat.Requests, p.QuotaRequests, win)
+	case quota > 0 && quotaIsTokens:
+		return fmt.Sprintf("%s/%s tok · %s", fmtTok(stat.UsedTokens), fmtTok(quota), quotaWindow)
+	case quota > 0:
+		return fmt.Sprintf("%d/%d req · %s", stat.Requests, quota, quotaWindow)
 	default:
 		return "no tracked quota (subscription / per-token)"
 	}

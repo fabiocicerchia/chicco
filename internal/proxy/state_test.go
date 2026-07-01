@@ -33,8 +33,8 @@ func TestPersistenceRoundTrip(t *testing.T) {
 
 	r1 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}}, nil)
 	r1.EnablePersistence(path) // no file yet — starts empty
-	r1.recordUsage("groq", 1500)
-	r1.recordUsage("groq", 500)
+	r1.recordUsage("groq", "m", 1500)
+	r1.recordUsage("groq", "m", 500)
 	if err := r1.Persist(); err != nil {
 		t.Fatalf("persist: %v", err)
 	}
@@ -49,8 +49,8 @@ func TestPersistenceRoundTrip(t *testing.T) {
 
 // TestPersistDisabledIsNoop confirms Persist does nothing without a path.
 func TestPersistDisabledIsNoop(t *testing.T) {
-	r := NewRotator(nil)
-	r.recordUsage("x", 10)
+	r := NewRotator(nil, nil)
+	r.recordUsage("x", "m", 10)
 	if err := r.Persist(); err != nil {
 		t.Errorf("Persist with no state path should be a no-op, got %v", err)
 	}

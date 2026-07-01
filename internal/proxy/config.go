@@ -87,6 +87,20 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// Quota holds the client-side rate-limit caps for a provider. All fields are
+// optional; zero means no limit for that dimension.
+// RPM/RPH/RPD: max requests per minute / hour / day.
+// TPM/TPH/TPD: max tokens per minute / hour / day.
+// The tightest daily limit also drives the dashboard usage bar.
+type Quota struct {
+	RPM int   `yaml:"rpm"` // requests per minute
+	RPH int   `yaml:"rph"` // requests per hour
+	RPD int   `yaml:"rpd"` // requests per day
+	TPM int64 `yaml:"tpm"` // tokens per minute
+	TPH int64 `yaml:"tph"` // tokens per hour
+	TPD int64 `yaml:"tpd"` // tokens per day
+}
+
 // Provider is one upstream OpenAI-compatible endpoint. APIKey is sent as a Bearer
 // token (it is run through os.ExpandEnv on load, so `${GROQ_API_KEY}` works);
 // Models is round-robined per provider. A provider with an empty key or no models
@@ -96,13 +110,11 @@ type Provider struct {
 	BaseURL string   `yaml:"base_url"`
 	APIKey  string   `yaml:"api_key"`
 	Models  []string `yaml:"models"`
-	// QuotaTokens / QuotaRequests are the provider's budget for its quota window,
-	// used only to drive the dashboard's usage bar. Tokens take priority; a
-	// request budget covers providers capped by request count (e.g. Google's free
-	// tier) rather than tokens. 0/0 shows usage without a bar.
-	QuotaTokens   int64  `yaml:"quota_tokens"`
-	QuotaRequests int    `yaml:"quota_requests"`
-	Window        string `yaml:"window"` // "daily" | "monthly" | "none" (default): when usage counters reset
+
+	// Quota holds client-side rate limits enforced before forwarding, so a
+	// provider is put in cooldown the moment a limit would be breached rather than
+	// waiting for the upstream to 429.
+	Quota Quota `yaml:"quota"`
 
 	// CLI provider fields (kind: cli). Instead of an HTTP call, chicco runs Command
 	// with Args (templated with {{model}}/{{system}}/{{user}}/{{prompt}}/{{output_file}}),
@@ -121,6 +133,31 @@ type Provider struct {
 	HealthExpect  string   `yaml:"health_expect"`   // require this substring in HealthCommand output, else HealthAuth (logged out)
 	Credential    string   `yaml:"credential"`      // optional file to stat for health (use ${HOME}/…)
 	TimeoutSecs   int      `yaml:"timeout_seconds"` // CLI run timeout (default 120)
+}
+
+// effectiveQuota derives the dashboard bar parameters from the quota fields.
+// It returns the quota value, whether it is token-based (true) or request-based
+// (false), and the window string for eventLog.windowTotals.
+// Priority: day > hour > minute (largest window first, so the bar tracks the
+// most meaningful hard cap). Returns quota=0 when no limits are configured.
+func (p Provider) effectiveQuota() (quota int64, isTokens bool, window string) {
+	q := p.Quota
+	switch {
+	case q.TPD > 0:
+		return q.TPD, true, "daily"
+	case q.RPD > 0:
+		return int64(q.RPD), false, "daily"
+	case q.TPH > 0:
+		return q.TPH, true, "hourly"
+	case q.RPH > 0:
+		return int64(q.RPH), false, "hourly"
+	case q.TPM > 0:
+		return q.TPM, true, "minutely"
+	case q.RPM > 0:
+		return int64(q.RPM), false, "minutely"
+	default:
+		return 0, false, "none"
+	}
 }
 
 // Model is a named virtual model that routes across one or more provider backends.

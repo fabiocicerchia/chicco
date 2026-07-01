@@ -53,7 +53,7 @@ func TestRenderBarColorAndFill(t *testing.T) {
 // TestViewNoPanic renders the dashboard at a few sizes to catch layout panics.
 func TestViewNoPanic(t *testing.T) {
 	rot := NewRotator([]Provider{
-		{Name: "groq", APIKey: "k", Models: []string{"llama-3.3-70b"}, TPD: 1000},
+		{Name: "groq", APIKey: "k", Models: []string{"llama-3.3-70b"}, Quota: Quota{TPD: 1000}},
 		{Name: "nofree", APIKey: "k", Models: []string{"m"}}, // no quota
 	}, nil)
 	rot.recordUsage("groq", "llama-3.3-70b", 600)
