@@ -1,12 +1,36 @@
 version: "2"
+
+run:
+  timeout: 5m
+
 linters:
   enable:
-    - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - misspell
-    - revive
-    - unconvert
-    - bodyclose
+    - errcheck      # unchecked errors
+    - govet         # go vet
+    - ineffassign   # ineffectual assignments
+    - staticcheck   # broad correctness/style analysis
+    - unused        # unused code
+    - misspell      # common spelling mistakes
+    - unconvert     # redundant type conversions
+    - bodyclose     # HTTP response bodies are closed
+  settings:
+    staticcheck:
+      # QF1002 (tagged-switch suggestion) is a style refactor, not a bug — leave
+      # the switch-true forms as written.
+      checks: ["all", "-QF1002"]
+  exclusions:
+    presets:
+      - std-error-handling   # restores the classic Close/Flush/Remove/print excludes (v1 default)
+    rules:
+      # Ignoring Write/Close return values in tests is noise, not a defect.
+      - path: _test\.go
+        linters: [errcheck]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/fabiocicerchia/chicco

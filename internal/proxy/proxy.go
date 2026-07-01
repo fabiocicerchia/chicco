@@ -369,7 +369,7 @@ func forward(ctx context.Context, p Provider, body []byte) (*upstream, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.APIKey)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:bodyclose // body ownership passes to upstream; stream()/handleChat close it
 	if err != nil {
 		return nil, err
 	}
