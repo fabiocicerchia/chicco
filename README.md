@@ -1,13 +1,19 @@
 # chicco
 
+[![ci](https://github.com/fabiocicerchia/chicco/actions/workflows/ci.yml/badge.svg)](https://github.com/fabiocicerchia/chicco/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/fabiocicerchia/chicco?sort=semver)](https://github.com/fabiocicerchia/chicco/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/fabiocicerchia/chicco.svg)](https://pkg.go.dev/github.com/fabiocicerchia/chicco)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fabiocicerchia/chicco)](https://goreportcard.com/report/github.com/fabiocicerchia/chicco)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A tiny **local OpenAI-compatible rotation proxy**. chicco serves one endpoint and
 forwards each `/v1/chat/completions` request to the next free-tier provider in
 `chicco.yaml`, round-robining models and skipping any provider that hits a quota
 or auth error — so a single stable endpoint fronts a pool of free-tier tokens.
 
-It is the companion to [ciccio](../README.md): point ciccio's `openai` backend at
-chicco and your agents transparently cascade across free models, moving on to the
-next one as tokens run out.
+Point any OpenAI client (agent runner, SDK, `curl`) at
+`http://127.0.0.1:41986/v1` and your requests transparently cascade across free
+models, moving on to the next one as tokens run out.
 
 It ships with a live **Bubble Tea dashboard**: the top half lists every provider
 with its tokens-used / quota and a red→amber→green usage bar; the bottom half is a
@@ -42,6 +48,46 @@ limit — resets in 17h43m`). It probes every model directly (even ones in coold
 so you see their real state) and folds the results back into the table; runs in the
 background so the dashboard stays live. Run with `-headless` (or pipe stdout) to
 disable the dashboard and log plainly to stderr instead.
+
+## Install
+
+**One-liner** (Linux / macOS, amd64 / arm64) — downloads the latest release,
+verifies its SHA-256, and installs the binary:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/fabiocicerchia/chicco/main/install.sh | sh
+```
+
+Set `BINDIR` to choose the install directory, or `CHICCO_VERSION` to pin a tag.
+
+**Go:**
+
+```sh
+go install github.com/fabiocicerchia/chicco@latest
+```
+
+**Manual:** grab an archive from the [releases page](https://github.com/fabiocicerchia/chicco/releases/latest).
+Every release ships an SPDX SBOM and a keyless [cosign](https://github.com/sigstore/cosign)
+signature over `checksums.txt`; verify it before trusting a download:
+
+```sh
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-identity-regexp 'https://github.com/fabiocicerchia/chicco' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+```
+
+## Quick start
+
+```sh
+cp chicco.yaml myproviders.yaml          # edit in your providers + keys
+GROQ_API_KEY=... CEREBRAS_API_KEY=... chicco -config myproviders.yaml
+```
+
+Then point any OpenAI client at `http://127.0.0.1:41986/v1`.
 
 ## Boot health check
 
@@ -204,11 +250,10 @@ SQLite would add a heavy dependency for no real gain.
 ## Running
 
 ```sh
-# from this directory
-GROQ_API_KEY=... CEREBRAS_API_KEY=... chicco
+GROQ_API_KEY=... CEREBRAS_API_KEY=... chicco -config chicco.yaml
 
-# or from the repo root
-go run ./chicco -config chicco/chicco.yaml
+# or straight from a checkout
+go run . -config chicco.yaml
 ```
 
 Flags:
@@ -241,9 +286,9 @@ Now every ciccio agent runs through the free-tier cascade.
 ## Build
 
 ```sh
-make build-chicco       # -> ./bin/chicco
-go build -o bin/chicco ./chicco
-go test ./chicco/
+make build      # -> ./bin/chicco
+make test       # go test -race ./...
+make snapshot   # local GoReleaser build (dist/) — needs goreleaser
 ```
 
 ## Endpoints
@@ -252,3 +297,12 @@ go test ./chicco/
 |--------|-------------------------|----------------------------------|
 | `POST` | `/v1/chat/completions`  | rotated, proxied chat completion |
 | `GET`  | `/health`               | liveness probe (returns `200`)   |
+
+## Contributing
+
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security reports: [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © Fabio Cicerchia
