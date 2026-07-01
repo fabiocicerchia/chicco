@@ -317,7 +317,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		if p.Kind == "cli" {
 			// CLI providers return plain text — OpenAI function-calling isn't
 			// supported. Warn if the caller sent tool definitions so the gap isn't
-			// silent (ciccio never does; it applies its own SEARCH/REPLACE edits).
+			// silent (agents that apply their own edits from the text never send them).
 			if tl, ok := payload["tools"].([]any); ok && len(tl) > 0 {
 				log.Printf("chicco: %s is a CLI provider — request 'tools' (function-calling) is ignored; it returns plain text", p.Name)
 			}

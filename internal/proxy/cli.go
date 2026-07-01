@@ -20,7 +20,7 @@ import (
 // Instead of an HTTP call, a CLI provider runs a local tool (claude, codex, kiro,
 // a qwen CLI, …) as a one-shot subprocess: chicco builds the argv from a template,
 // feeds it the prompt, buffers the whole completion, then synthesizes the
-// OpenAI-compatible SSE the caller (ciccio's streamOAIChat) expects. The Rotator's
+// OpenAI-compatible SSE the caller expects. The Rotator's
 // cooldown/health/usage machinery is reused unchanged — a non-zero exit looks like
 // an HTTP 5xx and fails over to the next provider, which is clean because nothing
 // has been written to the client yet.

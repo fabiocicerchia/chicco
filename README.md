@@ -22,22 +22,6 @@ restarts and reboots.
 
 ![chicco dashboard](docs/demo.gif)
 
-```
-╭ chicco · :41986 · 5 providers ───────────────────────────────────╮
-│   STATUS               TOKENS USED / QUOTA   REQS   USAGE          │
-│ ● groq                 123.4k / 200k         req 18 [████████░░] 62%│
-│ ● cerebras             88.0k / 1.0M          req 12 [█░░░░░░░░░]  9%│
-│ ◐ openrouter           —                     req 4  cooldown 47s   │
-│ ● google               12.0k / —             req 3  (no quota)     │
-│ ● mistral              0 / —                 req 0  auth failed — check API key │
-│ ● ready   ◐ cooldown   ● bad key / down   ○ checking   q quits     │
-╰───────────────────────────────────────────────────────────────────╯
-╭ logs ─────────────────────────────────────────────────────────────╮
-│ 17:53:47 chicco: routing to groq (llama-3.3-70b-versatile)         │
-│ 17:53:49 chicco: groq (llama-3.3-70b-versatile) served 412 tokens  │
-╰───────────────────────────────────────────────────────────────────╯
-```
-
 The dot tells you each provider's state at a glance: **green** ready, **amber**
 in cooldown after a quota/rate-limit error, **grey** if its key was rejected or the
 endpoint is unreachable, hollow grey while still being checked.
@@ -105,7 +89,7 @@ recovers to green on its own. CLI providers are probed by their `health_command`
 (or `credential` file) instead.
 
 ```
-ciccio ──HTTP──▶ chicco (:41986) ──▶ groq      (llama-3.3-70b-versatile)
+client ──HTTP──▶ chicco (:41986) ──▶ groq      (llama-3.3-70b-versatile)
                                  ├──▶ cerebras  (llama-3.3-70b)
                                  ├──▶ openrouter(deepseek-chat-v3:free)
                                  └──▶ google    (gemini-2.0-flash)
@@ -229,7 +213,8 @@ the request to one prompt and reads back plain text; it does not support OpenAI
 function-calling (a `tools` array in the request is ignored, with a logged warning).
 More importantly, run each CLI in a **no-tools / read-only** mode so it can't edit
 files or run commands on the host — any edits would land in chicco's working
-directory, and ciccio expects to apply edits itself from the returned text. The
+directory, and the calling agent expects to apply edits itself from the returned
+text. The
 presets do this where the tool allows it (claude `--bare --tools ""`, codex
 `--sandbox read-only`, qwen plain `-p`); kiro has no clean answer-only mode, so it's
 the least suitable here.
