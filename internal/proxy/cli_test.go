@@ -77,7 +77,7 @@ func TestRunCLIEndToEnd(t *testing.T) {
 		Command: "sh",
 		Args:    []string{"-c", "printf 'hello from {{model}}'"},
 		Models:  []string{"m1"},
-	}})
+	}}, nil)
 	srv := httptest.NewServer(Handler(rot))
 	defer srv.Close()
 
@@ -112,7 +112,7 @@ func TestRunCLIFailureFailsOver(t *testing.T) {
 	rot := NewRotator([]Provider{
 		{Name: "broken-cli", Kind: "cli", Command: "sh", Args: []string{"-c", "exit 1"}, Models: []string{"m"}},
 		{Name: "http", BaseURL: working.URL, APIKey: "k", Models: []string{"m"}},
-	})
+	}, nil)
 	srv := httptest.NewServer(Handler(rot))
 	defer srv.Close()
 

@@ -10,7 +10,7 @@ import (
 // and survives a restart (so "limit · resets …" doesn't vanish on relaunch).
 func TestLimitBlockPersists(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.json")
-	r1 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}})
+	r1 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}}, nil)
 	r1.EnablePersistence(path)
 	r1.block("groq", 2*time.Hour, "limit")
 	if s := r1.Snapshot()[0]; s.CooldownKind != "limit" || s.CooldownLeft < time.Hour {
@@ -20,7 +20,7 @@ func TestLimitBlockPersists(t *testing.T) {
 		t.Fatalf("persist: %v", err)
 	}
 
-	r2 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}})
+	r2 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}}, nil)
 	r2.EnablePersistence(path)
 	if s := r2.Snapshot()[0]; s.CooldownKind != "limit" || s.CooldownLeft < time.Hour {
 		t.Errorf("cooldown not restored across restart: %+v", s)
@@ -31,7 +31,7 @@ func TestLimitBlockPersists(t *testing.T) {
 func TestPersistenceRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 
-	r1 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}})
+	r1 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}}, nil)
 	r1.EnablePersistence(path) // no file yet — starts empty
 	r1.recordUsage("groq", 1500)
 	r1.recordUsage("groq", 500)
@@ -39,7 +39,7 @@ func TestPersistenceRoundTrip(t *testing.T) {
 		t.Fatalf("persist: %v", err)
 	}
 
-	r2 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}})
+	r2 := NewRotator([]Provider{{Name: "groq", APIKey: "k", Models: []string{"m"}}}, nil)
 	r2.EnablePersistence(path)
 	s := r2.Snapshot()
 	if len(s) != 1 || s[0].UsedTokens != 2000 || s[0].Requests != 2 {

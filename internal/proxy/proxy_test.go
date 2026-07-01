@@ -49,7 +49,7 @@ func TestRotationFailover(t *testing.T) {
 	rot := NewRotator([]Provider{
 		{Name: "a", BaseURL: limited.URL, APIKey: "key-a", Models: []string{"m-a"}},
 		{Name: "b", BaseURL: working.URL, APIKey: "key-b", Models: []string{"m-b"}},
-	})
+	}, nil)
 	srv := httptest.NewServer(Handler(rot))
 	defer srv.Close()
 
@@ -90,7 +90,7 @@ func TestModelOverride(t *testing.T) {
 
 	rot := NewRotator([]Provider{
 		{Name: "p", BaseURL: upstream.URL, APIKey: "k", Models: []string{"chosen-model"}},
-	})
+	}, nil)
 	srv := httptest.NewServer(Handler(rot))
 	defer srv.Close()
 
@@ -111,7 +111,7 @@ func TestActiveSkipsUnconfigured(t *testing.T) {
 		{Name: "nokey", BaseURL: "http://x", APIKey: "", Models: []string{"m"}},
 		{Name: "nomodel", BaseURL: "http://x", APIKey: "k", Models: nil},
 		{Name: "ok", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}},
-	})
+	}, nil)
 	active := rot.Active()
 	if len(active) != 1 || active[0].Name != "ok" {
 		t.Errorf("Active() = %+v, want only [ok]", active)

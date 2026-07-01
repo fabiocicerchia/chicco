@@ -40,6 +40,7 @@ const (
 type Rotator struct {
 	mu        sync.Mutex
 	providers []Provider
+	models    []Model // virtual model routing table from config (may be empty)
 	modelIdx  map[string]int
 	blocked   map[string]time.Time
 	tokens    map[string]int64
@@ -57,8 +58,8 @@ type Rotator struct {
 	dirty     bool
 }
 
-// NewRotator builds a Rotator over the configured providers.
-func NewRotator(providers []Provider) *Rotator {
+// NewRotator builds a Rotator over the configured providers and virtual model table.
+func NewRotator(providers []Provider, models []Model) *Rotator {
 	windowOf := make(map[string]string, len(providers))
 	for _, p := range providers {
 		windowOf[p.Name] = p.Window
@@ -158,6 +159,59 @@ func (r *Rotator) Snapshot() []ProviderStat {
 			CooldownLeft:  left,
 			CooldownKind:  kind,
 			Health:        r.health[p.Name],
+		}
+	}
+	return out
+}
+
+// VirtualModelIDs returns the IDs of all virtual models defined in the routing
+// table, in config order. Used by the /v1/models handler.
+func (r *Rotator) VirtualModelIDs() []string {
+	ids := make([]string, len(r.models))
+	for i, m := range r.models {
+		ids[i] = m.ID
+	}
+	return ids
+}
+
+// activeForModel returns the subset of active providers that back a named virtual
+// model, each trimmed to only the backend model(s) listed for that virtual model.
+// For "chicco:auto" (or when the requested model doesn't match any virtual model)
+// it returns all active providers unchanged.
+func (r *Rotator) activeForModel(requested string) []Provider {
+	all := r.Active()
+	if requested == "chicco:auto" || requested == "" {
+		return all
+	}
+	// Find the virtual model definition.
+	var vm *Model
+	for i := range r.models {
+		if r.models[i].ID == requested {
+			vm = &r.models[i]
+			break
+		}
+	}
+	if vm == nil {
+		// Unknown model — fall back to full rotation so the caller gets a useful
+		// response rather than a 503.
+		return all
+	}
+	// Build a lookup: provider name → list of backend model names for this VM.
+	backendModels := make(map[string][]string, len(vm.Backends))
+	for _, b := range vm.Backends {
+		if b.Model != "" {
+			backendModels[b.Provider] = append(backendModels[b.Provider], b.Model)
+		}
+	}
+	// Keep only active providers that appear in the backend list, replacing their
+	// full Models slice with only the backend-specific models so pick() round-robins
+	// within the right set.
+	out := make([]Provider, 0, len(vm.Backends))
+	for _, p := range all {
+		if bm, ok := backendModels[p.Name]; ok {
+			pc := p
+			pc.Models = bm
+			out = append(out, pc)
 		}
 	}
 	return out
@@ -289,7 +343,11 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	active := r.Active()
+	// Determine which subset of providers to route to based on the requested model.
+	// "chicco:auto" or an unknown model routes across all active providers.
+	// A known virtual model ID restricts routing to its configured backends.
+	requestedModel, _ := payload["model"].(string)
+	active := r.activeForModel(requestedModel)
 	if len(active) == 0 {
 		writeError(w, http.StatusServiceUnavailable, "chicco: no providers configured with an API key and models")
 		return

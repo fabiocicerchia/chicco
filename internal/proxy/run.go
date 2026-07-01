@@ -37,7 +37,7 @@ func Run(opts Options) error {
 		cfg.Addr = opts.Addr
 	}
 
-	rot := NewRotator(cfg.Providers)
+	rot := NewRotator(cfg.Providers, cfg.Models)
 	active := rot.Active()
 	if len(active) == 0 {
 		return fmt.Errorf("no providers with an API key and models are configured —\n"+

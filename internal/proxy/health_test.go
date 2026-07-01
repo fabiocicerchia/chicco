@@ -61,7 +61,7 @@ func TestCheckHealthSetsSnapshot(t *testing.T) {
 	rot := NewRotator([]Provider{
 		{Name: "good", BaseURL: good.URL, APIKey: "good", Models: []string{"m"}},
 		{Name: "bad", BaseURL: bad.URL, APIKey: "wrong", Models: []string{"m"}},
-	})
+	}, nil)
 	rot.CheckHealth(context.Background())
 
 	got := map[string]Health{}
@@ -92,7 +92,7 @@ func TestCheckHealthRetriesDown(t *testing.T) {
 	}))
 	defer flaky.Close()
 
-	rot := NewRotator([]Provider{{Name: "flaky", BaseURL: flaky.URL, APIKey: "k", Models: []string{"m"}}})
+	rot := NewRotator([]Provider{{Name: "flaky", BaseURL: flaky.URL, APIKey: "k", Models: []string{"m"}}}, nil)
 	rot.CheckHealth(context.Background())
 
 	if got := rot.Snapshot()[0].Health; got != HealthOK {

@@ -19,32 +19,24 @@
 addr: ":41986"
 
 providers:
-  - name: groq
+  groq:
     base_url: https://api.groq.com/openai/v1
     api_key: ${GROQ_API_KEY}
     quota_tokens: 200000      # 200k tokens/day
     window: daily
-    models:
-      - llama-3.3-70b-versatile
-  - name: cerebras
+  cerebras:
     base_url: https://api.cerebras.ai/v1
     api_key: ${CEREBRAS_API_KEY}
     quota_tokens: 1000000     # 1M tokens/day
     window: daily
-    models:
-      - llama-3.3-70b
-  - name: openrouter
+  openrouter:
     base_url: https://openrouter.ai/api/v1
     api_key: ${OPENROUTER_API_KEY}
-    models:                   # no hard cap — leave quota/window unset
-      - deepseek/deepseek-chat-v3-0324:free
-  - name: google
+  google:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai/
     api_key: ${GOOGLE_API_KEY}
     quota_requests: 1000      # Google free tier is request-capped, not token-capped
     window: daily
-    models:
-      - gemini-2.0-flash
 
   # ── CLI-backed providers (kind: cli) ───────────────────────────────────────
   # Instead of an HTTP call, chicco runs a local tool and synthesizes the reply.
@@ -54,7 +46,7 @@ providers:
   # default output: text uses stdout verbatim. Place these wherever you want in the
   # order above — e.g. after the free HTTP providers to use them only as a fallback.
   #
-  # - name: claude-cli
+  # claude-cli:
   #   kind: cli
   #   command: claude
   #   # {{user}} (not {{prompt}}) so the system prompt isn't duplicated; --tools ""
@@ -69,7 +61,7 @@ providers:
   #   health_expect: '"loggedIn": true'              # grey if output lacks this
   #   models: [sonnet, opus]
   #
-  # - name: codex-cli
+  # codex-cli:
   #   kind: cli
   #   command: codex
   #   # exec = non-interactive; read-only sandbox (no edits); -o writes the final
@@ -81,14 +73,14 @@ providers:
   #   health_expect: "Logged in"
   #   models: [default]
   #
-  # - name: gemini-cli
+  # gemini-cli:
   #   kind: cli
   #   command: gemini
   #   args: ["-p", "{{prompt}}", "--model", "{{model}}", "--approval-mode", "plan"]
   #   credential: ${HOME}/.gemini/oauth_creds.json
   #   models: [gemini-2.5-flash, gemini-2.5-pro]
   #
-  # - name: qwen-cli
+  # qwen-cli:
   #   kind: cli
   #   command: qwen
   #   args: ["{{user}}", "--model", "{{model}}", "--system-prompt", "{{system}}",
@@ -96,7 +88,7 @@ providers:
   #   credential: ${HOME}/.qwen
   #   models: [qwen3-coder-plus]
   #
-  # - name: kiro-cli
+  # kiro-cli:
   #   kind: cli
   #   command: kiro-cli
   #   # --no-interactive headless; --trust-tools= (empty) trusts NO tools (read-only).
@@ -104,3 +96,20 @@ providers:
   #   strip_ansi: true
   #   credential: ${HOME}/.kiro
   #   models: [default]
+
+models:
+  - id: llama-3.3-70b
+    strategy: rotate
+    backends:
+      - provider: cerebras
+        model: llama-3.3-70b
+      - provider: groq
+        model: llama-3.3-70b-versatile
+      - provider: openrouter
+        model: meta-llama/llama-3.3-70b-instruct:free
+
+  - id: glm-4.7
+    strategy: rotate
+    backends:
+      - provider: cerebras
+        model: zai-glm-4.7
