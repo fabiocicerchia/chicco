@@ -1,17 +1,18 @@
 # Regenerate the dashboard GIF with charmbracelet/vhs:
-#   vhs docs/demo.tape   ->   docs/demo.gif
-# Requires a chicco.yaml with a couple of providers in the working directory.
+#   go build -o "$(go env GOPATH)/bin/chicco" ./cmd/chicco   # put chicco on PATH
+#   vhs docs/demo.tape                                        # -> docs/demo.gif
+# Uses the offline demo config (docs/demo.chicco.yaml) — no keys, no network.
 Output docs/demo.gif
 
-Set FontSize 16
-Set Width 1000
-Set Height 520
-Set Padding 16
+Set FontSize 15
+Set Width 1100
+Set Height 620
+Set Padding 18
 
-Type "chicco -config chicco.yaml"
+Type "chicco -config docs/demo.chicco.yaml"
 Enter
-Sleep 3s
+Sleep 4s
 Type "t"          # test every configured model
-Sleep 5s
+Sleep 6s
 Type "q"          # quit
 Sleep 1s

@@ -20,6 +20,8 @@ with its tokens-used / quota and a red→amber→green usage bar; the bottom hal
 rolling log pane. Token usage is **persisted to disk**, so the counters survive
 restarts and reboots.
 
+![chicco dashboard](docs/demo.gif)
+
 ```
 ╭ chicco · :41986 · 5 providers ───────────────────────────────────╮
 │   STATUS               TOKENS USED / QUOTA   REQS   USAGE          │

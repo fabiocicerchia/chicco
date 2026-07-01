@@ -1,0 +1,41 @@
+# Offline demo config used by docs/demo.tape to record the dashboard GIF.
+# Every provider is a `kind: cli` backed by a local shell command, so the demo
+# needs no API keys and makes no network calls. NOT a real config — see the
+# top-level chicco.yaml for that.
+addr: ":41986"
+
+providers:
+  # Two healthy providers that answer instantly.
+  - name: groq
+    kind: cli
+    command: sh
+    args: ["-c", "sleep 0.5; printf 'Hello! I am %s, answering through chicco.' \"$0\"", "{{model}}"]
+    models: [llama-3.3-70b-versatile]
+    quota_tokens: 200000
+    health_command: ["true"]
+
+  - name: cerebras
+    kind: cli
+    command: sh
+    args: ["-c", "sleep 0.4; printf 'Response from %s.' \"$0\"", "{{model}}"]
+    models: [llama-3.3-70b]
+    quota_tokens: 1000000
+    health_command: ["true"]
+
+  # Green at boot, but its calls hit a usage limit — the `t` test cools it down,
+  # so the dashboard shows an amber "limit · resets" countdown.
+  - name: openrouter
+    kind: cli
+    command: sh
+    args: ["-c", "echo 'rate limit reached, try again in 2h 30m' >&2; exit 1"]
+    models: [deepseek-chat-v3:free]
+    quota_requests: 50
+    health_command: ["true"]
+
+  # Rejected key — stays grey (auth failed) throughout.
+  - name: mistral
+    kind: cli
+    command: sh
+    args: ["-c", "echo 'unauthorized: invalid api key' >&2; exit 1"]
+    models: [mistral-large]
+    health_command: ["sh", "-c", "exit 1"]
