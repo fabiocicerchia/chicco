@@ -289,6 +289,9 @@ make test       # go test -race ./...
 make snapshot   # local GoReleaser build (dist/) — needs goreleaser
 ```
 
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for all make targets and the
+local-development requirements.
+
 ## Endpoints
 
 | Method | Path                    | Purpose                          |

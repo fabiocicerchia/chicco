@@ -13,6 +13,9 @@ make test       # go test -race ./...
 make lint       # golangci-lint (or: go vet ./...)
 ```
 
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for every make target and the
+full list of (mostly optional) tooling.
+
 Adding a provider is usually a `chicco.yaml` entry, not code — see the README's
 provider tables first.
 
