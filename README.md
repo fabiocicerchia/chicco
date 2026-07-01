@@ -279,10 +279,16 @@ local-development requirements.
 
 ## Endpoints
 
-| Method | Path                    | Purpose                          |
-|--------|-------------------------|----------------------------------|
-| `POST` | `/v1/chat/completions`  | rotated, proxied chat completion |
-| `GET`  | `/health`               | liveness probe (returns `200`)   |
+| Method | Path                    | Purpose                                          |
+|--------|-------------------------|--------------------------------------------------|
+| `POST` | `/v1/chat/completions`  | rotated, proxied chat completion                 |
+| `GET`  | `/v1/models`            | list virtual model IDs + `chicco:auto`           |
+| `GET`  | `/health`               | liveness probe (returns `200`)                   |
+
+When the `model` field in a `/v1/chat/completions` request matches a virtual model
+ID from the `models:` section of `chicco.yaml`, the request is routed only to the
+backends configured for that model. Use `chicco:auto` (or any unknown model name)
+to route across all active providers regardless of model.
 
 ## Contributing
 

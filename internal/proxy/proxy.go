@@ -304,12 +304,39 @@ func parseRetryAfter(h string) time.Duration {
 }
 
 // Handler returns the HTTP handler: /v1/chat/completions is rotated across
-// providers; /health is a liveness probe.
+// providers; /v1/models lists available virtual models; /health is a liveness probe.
 func Handler(r *Rotator) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("/v1/models", r.handleModels)
 	mux.HandleFunc("/v1/chat/completions", r.handleChat)
 	return mux
+}
+
+// handleModels serves GET /v1/models in the OpenAI format: an object list of
+// model descriptors. It includes one entry per virtual model defined in the
+// routing table plus the catch-all "chicco:auto" that rotates across everything.
+func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	ids := r.VirtualModelIDs()
+	now := time.Now().Unix()
+	type modelObj struct {
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		Created int64  `json:"created"`
+		OwnedBy string `json:"owned_by"`
+	}
+	data := make([]modelObj, 0, len(ids)+1)
+	// chicco:auto first — always present, routes across all active providers.
+	data = append(data, modelObj{ID: "chicco:auto", Object: "model", Created: now, OwnedBy: "chicco"})
+	for _, id := range ids {
+		data = append(data, modelObj{ID: id, Object: "model", Created: now, OwnedBy: "chicco"})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data})
 }
 
 // handleChat forwards one chat-completion request, overriding the model with the
