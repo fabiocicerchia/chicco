@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,6 +62,10 @@ type Rotator struct {
 	// dirty marks counters changed since the last write.
 	statePath string
 	dirty     bool
+	// authKey, when non-empty, is the shared secret every inbound request (except
+	// /health) must present as `Authorization: Bearer <key>`. Empty leaves chicco
+	// open (the localhost default). Set once at startup, read-only thereafter.
+	authKey string
 }
 
 // NewRotator builds a Rotator over the configured providers and virtual model table.
@@ -413,7 +418,36 @@ func Handler(r *Rotator, logs *logBuffer) http.Handler {
 	mux.HandleFunc("/v1/chat/completions", r.handleChat)
 	mux.HandleFunc("/v1/status", r.handleStatus(logs))
 	mux.HandleFunc("/dashboard", handleDashboard)
-	return mux
+	return r.withAuth(mux)
+}
+
+// withAuth guards every endpoint except /health with the optional shared secret
+// (top-level api_key in chicco.yaml). With no key configured chicco stays open, as
+// before — fine on 127.0.0.1. Set a key when binding a public addr so only callers
+// presenting `Authorization: Bearer <key>` get through. /health is always open so
+// liveness probes need no secret.
+func (r *Rotator) withAuth(next http.Handler) http.Handler {
+	if r.authKey == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/health" && !bearerMatches(req.Header.Get("Authorization"), r.authKey) {
+			writeError(w, http.StatusUnauthorized, "chicco: missing or invalid API key")
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
+// bearerMatches reports whether an Authorization header carries the expected
+// bearer token, compared in constant time so a wrong key leaks no timing signal.
+func bearerMatches(header, key string) bool {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return false
+	}
+	got := strings.TrimSpace(header[len(prefix):])
+	return subtle.ConstantTimeCompare([]byte(got), []byte(key)) == 1
 }
 
 // handleStatus returns a handler that serves GET /v1/status as JSON containing

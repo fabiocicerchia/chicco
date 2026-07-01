@@ -145,6 +145,54 @@ func TestModelsEndpoint(t *testing.T) {
 	}
 }
 
+// TestInboundAuth confirms the optional shared secret guards every endpoint
+// except /health, and constant-time-compares the presented bearer token.
+func TestInboundAuth(t *testing.T) {
+	rot := NewRotator([]Provider{{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}}}, nil)
+	rot.authKey = "s3cret"
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+
+	get := func(path, auth string) int {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+		if auth != "" {
+			req.Header.Set("Authorization", auth)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := get("/v1/models", ""); got != http.StatusUnauthorized {
+		t.Errorf("/v1/models without key = %d, want 401", got)
+	}
+	if got := get("/v1/models", "Bearer wrong"); got != http.StatusUnauthorized {
+		t.Errorf("/v1/models with wrong key = %d, want 401", got)
+	}
+	if got := get("/v1/models", "Bearer s3cret"); got != http.StatusOK {
+		t.Errorf("/v1/models with right key = %d, want 200", got)
+	}
+	if got := get("/health", ""); got != http.StatusOK {
+		t.Errorf("/health without key = %d, want 200 (probes stay open)", got)
+	}
+
+	// With no key configured, chicco is open (the localhost default).
+	open := NewRotator([]Provider{{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}}}, nil)
+	osrv := httptest.NewServer(Handler(open, nil))
+	defer osrv.Close()
+	resp, err := http.Get(osrv.URL + "/v1/models")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("open /v1/models = %d, want 200", resp.StatusCode)
+	}
+}
+
 // TestActiveSkipsUnconfigured drops providers without a key or models.
 func TestActiveSkipsUnconfigured(t *testing.T) {
 	rot := NewRotator([]Provider{

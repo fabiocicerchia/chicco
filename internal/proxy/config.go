@@ -12,7 +12,12 @@ const DefaultAddr = ":41986"
 
 // Config is chicco.yaml.
 type Config struct {
-	Addr      string     `yaml:"addr"`
+	Addr string `yaml:"addr"`
+	// APIKey, when set, is a shared secret guarding chicco's own inbound endpoints:
+	// callers must present it as `Authorization: Bearer <key>`. Empty (the default)
+	// leaves chicco open, which is fine bound to 127.0.0.1; set it when exposing
+	// chicco beyond localhost. ${VAR} is expanded from the environment.
+	APIKey    string     `yaml:"api_key"`
 	Providers []Provider // populated by UnmarshalYAML from either a list or a map
 	Models    []Model    `yaml:"models"` // forward-looking routing table (not yet wired up)
 }
@@ -21,6 +26,7 @@ type Config struct {
 // kept as a raw yaml.Node so we can detect list vs. map and preserve order.
 type rawConfig struct {
 	Addr      string    `yaml:"addr"`
+	APIKey    string    `yaml:"api_key"`
 	Providers yaml.Node `yaml:"providers"`
 	Models    []Model   `yaml:"models"`
 }
@@ -35,6 +41,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 	c.Addr = raw.Addr
+	c.APIKey = raw.APIKey
 	c.Models = raw.Models
 
 	n := &raw.Providers
@@ -224,6 +231,7 @@ func LoadConfig(path string) (Config, error) {
 	// (which requires at least one model per active provider) works unchanged.
 	resolveModels(&c)
 
+	c.APIKey = os.ExpandEnv(c.APIKey)
 	// Expand ${VAR} in keys, CLI command/credential, and argv. Placeholders use
 	// {{double braces}}, so ExpandEnv leaves them untouched.
 	for i := range c.Providers {

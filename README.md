@@ -149,6 +149,20 @@ providers:
 - A provider with an empty key or no models is inactive and skipped at startup.
 - Order is the preference order. List the providers you have keys for.
 
+### Guarding the endpoint (`api_key`)
+
+chicco has no inbound authentication by default — anyone who can reach `addr`
+can use it, which is fine on the `127.0.0.1` default. If you bind a public
+address, set a top-level `api_key` so callers must present it:
+
+```yaml
+api_key: ${CHICCO_API_KEY}   # inbound shared secret; ${VAR} expanded from env
+```
+
+Every endpoint except `/health` (kept open for liveness probes) then requires
+`Authorization: Bearer <key>`; the token is compared in constant time. Point
+your OpenAI client at chicco with this key as its API key.
+
 ## CLI-backed providers (`kind: cli`)
 
 A provider can run a **local CLI tool** (claude, codex, kiro, a qwen CLI, …) instead

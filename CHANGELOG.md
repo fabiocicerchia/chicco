@@ -22,5 +22,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - One-line installer (`install.sh`).
 - `GET /v1/models` endpoint listing `chicco:auto` plus the virtual models
   defined in `chicco.yaml`.
+- Optional inbound `api_key` shared secret: when set, every endpoint except
+  `/health` requires `Authorization: Bearer <key>` (constant-time compared).
 
 [Unreleased]: https://github.com/fabiocicerchia/chicco/commits/main

@@ -20,6 +20,12 @@
 
 addr: ":41986"
 
+# api_key (optional): a shared secret guarding chicco's own inbound endpoints.
+# Empty leaves chicco open, which is fine on the 127.0.0.1 default; set it when
+# you bind a public addr so callers must send `Authorization: Bearer <key>`
+# (every endpoint except /health). ${VAR} is expanded from the environment.
+# api_key: ${CHICCO_API_KEY}
+
 providers:
   groq:
     base_url: https://api.groq.com/openai/v1
