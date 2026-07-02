@@ -214,9 +214,11 @@ Counters are written to a JSON **state file** (`-state`, default `chicco-state.j
 atomically every 10s and on a clean dashboard exit, so usage persists across runs and
 reboots. Pass `-state ""` to disable persistence.
 
-> Counters reset at each provider's `window` boundary (daily/monthly UTC); with
-> `window: none` they accumulate forever (delete the state file to zero them). A
-> provider that doesn't report `usage` simply contributes 0 tokens for that request.
+> The dashboard bar tracks whichever `quota:` field is set: `rpd`/`tpd` resets at
+> UTC midnight; `rph`/`tph` and `rpm`/`tpm` are rolling windows (the last hour /
+> minute of events). With no `quota:` set, usage accumulates forever (delete the
+> state file to zero it). A provider that doesn't report `usage` simply
+> contributes 0 tokens for that request.
 
 It's a plain JSON file by design — the data is a tiny per-provider counter map, so
 SQLite would add a heavy dependency for no real gain.

@@ -28,17 +28,6 @@ func TestEventLogDailyWindow(t *testing.T) {
 	}
 }
 
-// TestEventLogMonthlyWindow confirms monthly totals span the current month.
-func TestEventLogMonthlyWindow(t *testing.T) {
-	el := &eventLog{}
-	el.record(500)
-	el.record(500)
-	reqs, tokens := el.windowTotals("monthly")
-	if reqs != 2 || tokens != 1000 {
-		t.Errorf("monthly = %d reqs / %d tok, want 2/1000", reqs, tokens)
-	}
-}
-
 // TestEventLogNoneWindowAccumulates confirms "none" sums all events.
 func TestEventLogNoneWindow(t *testing.T) {
 	r := NewRotator([]Provider{{Name: "n", Models: []string{"m"}, APIKey: "k"}}, nil)

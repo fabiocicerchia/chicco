@@ -16,7 +16,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pane; `t` tests every configured model.
 - Boot + periodic health probes that grey dead/unauthorized providers.
 - Token accounting persisted to a JSON state file across restarts, with
-  daily/monthly usage windows.
+  daily/hourly/minutely usage windows driven by each provider's `quota:`.
 - Cross-platform release binaries (linux/darwin/windows, amd64/arm64) with an
   SBOM and keyless cosign signatures.
 - One-line installer (`install.sh`).

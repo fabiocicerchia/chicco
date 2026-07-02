@@ -50,7 +50,7 @@ func (el *eventLog) totals(window time.Duration) (reqs int, tokens int64) {
 }
 
 // dailyTotals returns requests and tokens since UTC midnight today, used for
-// the dashboard quota bar (matches the "daily" window semantics in maybeReset).
+// the dashboard quota bar's "daily" window (see Provider.effectiveQuota).
 func (el *eventLog) dailyTotals() (reqs int, tokens int64) {
 	now := time.Now().UTC()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
@@ -64,28 +64,13 @@ func (el *eventLog) dailyTotals() (reqs int, tokens int64) {
 	return
 }
 
-// monthlyTotals returns requests and tokens since UTC month start.
-func (el *eventLog) monthlyTotals() (reqs int, tokens int64) {
-	now := time.Now().UTC()
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	for i := 0; i < el.size; i++ {
-		e := el.buf[i]
-		if e.At.After(monthStart) {
-			reqs++
-			tokens += e.Tokens
-		}
-	}
-	return
-}
-
 // windowTotals returns the totals for the provider's effective quota window
-// (daily / monthly / hourly / minutely / none = all-time).
+// (daily / hourly / minutely / none = all-time). "daily" is the only fixed
+// clock boundary (UTC midnight); "hourly"/"minutely" are rolling windows.
 func (el *eventLog) windowTotals(window string) (reqs int, tokens int64) {
 	switch window {
 	case "daily":
 		return el.dailyTotals()
-	case "monthly":
-		return el.monthlyTotals()
 	case "hourly":
 		return el.totals(time.Hour)
 	case "minutely":
