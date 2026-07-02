@@ -361,6 +361,8 @@ func providerRows(s ProviderStat, width int) []string {
 
 	var dot, tail string
 	switch {
+	case s.Inactive:
+		dot, tail = grey.Render("●"), grey.Render("not configured — check api_key/models")
 	case s.Health == HealthAuth:
 		dot, tail = grey.Render("●"), grey.Render("auth failed — check API key")
 	case s.Health == HealthDown:

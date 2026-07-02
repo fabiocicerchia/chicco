@@ -171,6 +171,11 @@ type ProviderStat struct {
 	CooldownLeft  time.Duration // 0 when available
 	CooldownKind  string        // "limit" | "auth" | "error" when CooldownLeft > 0
 	Health        Health
+	// Inactive is true when the provider is missing an api_key or has no
+	// models configured (see Provider.isActive) — it will never be probed or
+	// routed to, as distinct from Health == HealthUnknown, which just means a
+	// probe hasn't returned yet.
+	Inactive bool
 }
 
 // Snapshot returns the current per-provider stats (all configured providers, in
@@ -230,6 +235,7 @@ func (r *Rotator) Snapshot() []ProviderStat {
 			CooldownLeft:  left,
 			CooldownKind:  kind,
 			Health:        r.health[p.Name],
+			Inactive:      !p.isActive(),
 		}
 	}
 	return out
@@ -295,22 +301,27 @@ func (r *Rotator) activeForModel(requested string) (providers []Provider, strate
 	return out, vm.Strategy
 }
 
-// Active returns the providers usable for routing: those with at least one model
-// that are authenticated — an HTTP provider needs an api_key; a CLI provider
-// authenticates itself (login / credential file), so it needs none. It locks r.mu
-// because Reload can swap r.providers concurrently with a live request.
+// isActive reports whether p is usable for routing: it needs at least one model,
+// and — unless it's a CLI provider, which authenticates itself (login /
+// credential file) — a non-empty api_key.
+func (p Provider) isActive() bool {
+	if len(p.Models) == 0 {
+		return false
+	}
+	return p.Kind == "cli" || strings.TrimSpace(p.APIKey) != ""
+}
+
+// Active returns the providers usable for routing (see Provider.isActive). It
+// locks r.mu because Reload can swap r.providers concurrently with a live
+// request.
 func (r *Rotator) Active() []Provider {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := make([]Provider, 0, len(r.providers))
 	for _, p := range r.providers {
-		if len(p.Models) == 0 {
-			continue
+		if p.isActive() {
+			out = append(out, p)
 		}
-		if p.Kind != "cli" && strings.TrimSpace(p.APIKey) == "" {
-			continue
-		}
-		out = append(out, p)
 	}
 	return out
 }
@@ -573,6 +584,7 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 			CooldownSecs  float64         `json:"cooldown_secs"`
 			CooldownKind  string          `json:"cooldown_kind"`
 			Health        string          `json:"health"` // "ok" | "auth" | "down" | "unknown"
+			Inactive      bool            `json:"inactive"`
 		}
 
 		healthStr := func(h Health) string {
@@ -607,6 +619,7 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 				CooldownSecs:  s.CooldownLeft.Seconds(),
 				CooldownKind:  s.CooldownKind,
 				Health:        healthStr(s.Health),
+				Inactive:      s.Inactive,
 			}
 		}
 

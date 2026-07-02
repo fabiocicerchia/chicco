@@ -286,6 +286,7 @@ function esc(s) {
 // ── rendering ────────────────────────────────────────────────────────────────
 
 function dotHTML(p) {
+  if (p.inactive) return '<span class="dot dot-grey" title="not configured"></span>';
   switch (p.health) {
     case 'ok':
       if (p.cooldown_secs > 0 && p.cooldown_kind !== 'limit')
@@ -298,7 +299,10 @@ function dotHTML(p) {
 }
 
 function usageHTML(p, tokens, reqs) {
-  // Auth or down: show badge instead of bar.
+  // Inactive (no api_key/models — never probed), auth, or down: show a badge
+  // instead of a bar.
+  if (p.inactive)
+    return '<span class="badge badge-grey">not configured — check api_key/models</span>';
   if (p.health === 'auth')
     return '<span class="badge badge-grey">auth failed — check API key</span>';
   if (p.health === 'down')
