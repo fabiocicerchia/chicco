@@ -70,7 +70,20 @@ sha256sum --ignore-missing -c checksums.txt
 
 ```sh
 cp chicco.yaml myproviders.yaml          # edit in your providers + keys
-GROQ_API_KEY=... CEREBRAS_API_KEY=... chicco -config myproviders.yaml
+```
+
+Keep your keys in a `.env` file (never commit it) rather than typing them
+inline, and load it into the shell before running chicco:
+
+```sh
+# .env
+GROQ_API_KEY=...
+CEREBRAS_API_KEY=...
+```
+
+```sh
+set -a && . ./.env && set +a
+chicco -config myproviders.yaml
 ```
 
 Then point any OpenAI client at `http://127.0.0.1:41986/v1`.
@@ -226,7 +239,7 @@ SQLite would add a heavy dependency for no real gain.
 ## Running
 
 ```sh
-GROQ_API_KEY=... CEREBRAS_API_KEY=... chicco -config chicco.yaml
+chicco -config chicco.yaml       # keys loaded from .env — see Quick start
 
 # or straight from a checkout
 go run ./cmd/chicco -config chicco.yaml

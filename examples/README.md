@@ -11,8 +11,10 @@ Two things hold for **every** example below:
 
 - **The model name is arbitrary.** chicco overrides the request's `model` field
   with its own rotation pick, so send any string — `chicco`, `auto`, whatever.
-- **No API key is needed.** chicco does no auth of its own; where a client insists
-  on a non-empty key, use any placeholder (`sk-local`).
+- **No API key is needed** unless you've set a top-level `api_key` in
+  chicco.yaml (see the README's "Guarding the endpoint" section). Where a
+  client insists on a non-empty key, use any placeholder (`sk-local`) — or the
+  configured key if you did set one.
 
 ---
 

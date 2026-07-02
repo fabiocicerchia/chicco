@@ -20,8 +20,10 @@ chicco proxies provider API keys. A few things to keep in mind when running it:
 
 - Prefer `${VAR}` references in `chicco.yaml` over literal keys so secrets stay
   out of the file and out of version control.
-- chicco binds to `127.0.0.1` by default — do **not** expose it on a public
-  interface; it performs no authentication of its own.
+- chicco binds to `127.0.0.1` by default and does no inbound authentication
+  unless configured. If you bind a public interface, set a top-level `api_key`
+  in `chicco.yaml` so callers must present it as `Authorization: Bearer <key>`
+  — see the README's "Guarding the endpoint" section.
 - The state file (`chicco-state.json`) holds only per-provider token counters,
   no secrets.
 
