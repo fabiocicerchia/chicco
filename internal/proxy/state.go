@@ -18,9 +18,9 @@ import (
 // persistedState is the on-disk shape of the usage counters and active cooldowns.
 type persistedState struct {
 	// EventLogs stores the raw event slices keyed by provider name.
-	EventLogs     map[string][]event   `json:"event_logs,omitempty"`
-	ModelTokens   map[string]int64     `json:"model_tokens,omitempty"`
-	ModelRequests map[string]int       `json:"model_requests,omitempty"`
+	EventLogs     map[string][]event `json:"event_logs,omitempty"`
+	ModelTokens   map[string]int64   `json:"model_tokens,omitempty"`
+	ModelRequests map[string]int     `json:"model_requests,omitempty"`
 	// Blocked/Reason persist active cooldowns so a long window limit ("limit ·
 	// resets 3pm") survives a restart instead of being retried and re-failing.
 	Blocked map[string]time.Time `json:"blocked,omitempty"`

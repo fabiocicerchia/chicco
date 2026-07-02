@@ -57,8 +57,8 @@ type Rotator struct {
 	// dashboard can show a per-model bar alongside the provider total.
 	modelTokens   map[string]int64
 	modelRequests map[string]int
-	health    map[string]Health
-	reason    map[string]string // why a provider is blocked: "limit" | "auth" | "error"
+	health        map[string]Health
+	reason        map[string]string // why a provider is blocked: "limit" | "auth" | "error"
 	// statePath, when set, persists event logs across runs (see state.go);
 	// dirty marks counters changed since the last write.
 	statePath string
@@ -152,7 +152,7 @@ type ModelStat struct {
 	Name          string
 	Tokens        int64
 	Requests      int
-	Quota         int64  // per-model quota (0 = use provider quota)
+	Quota         int64 // per-model quota (0 = use provider quota)
 	QuotaIsTokens bool
 	QuotaWindow   string
 	UsedTokens    int64 // tokens used within the quota window (only set when Quota > 0)
