@@ -224,6 +224,22 @@ binds no port, so it's safe in CI or a pre-commit hook.
 
 `chicco -help` prints full usage.
 
+## Reloading the config (SIGHUP)
+
+Edit `chicco.yaml` — rotate a key, add or remove a provider, change a model's
+`strategy` — and send chicco a `SIGHUP` to apply it **without a restart**:
+
+```sh
+kill -HUP $(pgrep chicco)
+```
+
+The config is re-read and validated; a parse error or a hard validation problem
+is logged and the running config is kept, so a bad edit never takes chicco down.
+Providers that survive the edit keep their live usage counters and cooldowns; a
+removed provider is dropped and a new one starts fresh and is health-probed. The
+listen address can't change this way (the socket is already bound) — that still
+needs a restart. SIGHUP is a no-op on Windows.
+
 ## Pointing an agent at chicco
 
 chicco is a plain OpenAI-compatible endpoint, so any client that lets you set a

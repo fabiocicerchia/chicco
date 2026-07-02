@@ -57,6 +57,11 @@ func Run(opts Options) error {
 	go rot.CheckHealth(context.Background())
 	go rot.ReprobeLoop(context.Background(), 5*time.Minute)
 
+	// Reload chicco.yaml on SIGHUP (add/rotate a provider or key, change strategy)
+	// without a restart — the listen address can't change (socket already bound), but
+	// everything else does, keeping live counters/cooldowns. No-op on Windows.
+	watchSIGHUP(context.Background(), rot, opts.ConfigPath)
+
 	// Load any saved token counters and flush them back periodically so usage
 	// survives restarts/reboots.
 	if opts.StatePath != "" {

@@ -31,5 +31,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `weighted`) set on each virtual model in `models:`, with a per-provider
   `weight`, to spread load instead of always draining the top backend. A
   request that doesn't match a virtual model always uses plain config order.
+- Config hot-reload on `SIGHUP`: re-read and validate `chicco.yaml` without a
+  restart (add/rotate providers or keys, change strategy), keeping live counters
+  and cooldowns for surviving providers. No-op on Windows.
 
 [Unreleased]: https://github.com/fabiocicerchia/chicco/commits/main

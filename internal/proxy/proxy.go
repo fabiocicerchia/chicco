@@ -292,8 +292,11 @@ func (r *Rotator) activeForModel(requested string) (providers []Provider, strate
 
 // Active returns the providers usable for routing: those with at least one model
 // that are authenticated — an HTTP provider needs an api_key; a CLI provider
-// authenticates itself (login / credential file), so it needs none.
+// authenticates itself (login / credential file), so it needs none. It locks r.mu
+// because Reload can swap r.providers concurrently with a live request.
 func (r *Rotator) Active() []Provider {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	out := make([]Provider, 0, len(r.providers))
 	for _, p := range r.providers {
 		if len(p.Models) == 0 {
@@ -506,18 +509,25 @@ func Handler(r *Rotator, logs *logBuffer) http.Handler {
 // (top-level api_key in chicco.yaml). With no key configured chicco stays open, as
 // before — fine on 127.0.0.1. Set a key when binding a public addr so only callers
 // presenting `Authorization: Bearer <key>` get through. /health is always open so
-// liveness probes need no secret.
+// liveness probes need no secret. The key is read per request (under r.mu) so a
+// SIGHUP reload can add, change, or remove it without a restart.
 func (r *Rotator) withAuth(next http.Handler) http.Handler {
-	if r.authKey == "" {
-		return next
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path != "/health" && !bearerMatches(req.Header.Get("Authorization"), r.authKey) {
+		if key := r.currentAuthKey(); key != "" && req.URL.Path != "/health" &&
+			!bearerMatches(req.Header.Get("Authorization"), key) {
 			writeError(w, http.StatusUnauthorized, "chicco: missing or invalid API key")
 			return
 		}
 		next.ServeHTTP(w, req)
 	})
+}
+
+// currentAuthKey returns the inbound shared secret under r.mu, so a reload writing
+// it doesn't race the auth check reading it.
+func (r *Rotator) currentAuthKey() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.authKey
 }
 
 // bearerMatches reports whether an Authorization header carries the expected
