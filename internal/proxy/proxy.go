@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -559,15 +560,17 @@ func parseRetryAfter(h string) time.Duration {
 }
 
 // Handler returns the HTTP handler: /v1/chat/completions is rotated across
-// providers; /v1/models lists available virtual models; /health is a liveness
-// probe; /v1/status exposes a JSON snapshot for the web dashboard; /dashboard
-// serves the live HTML dashboard page. logs may be nil (e.g. a caller with no
-// use for log history) — the status endpoint returns an empty log array then.
+// providers; /v1/messages is the same rotation in Anthropic's wire format;
+// /v1/models lists available virtual models; /health is a liveness probe;
+// /v1/status exposes a JSON snapshot for the web dashboard; /dashboard serves
+// the live HTML dashboard page. logs may be nil (e.g. a caller with no use for
+// log history) — the status endpoint returns an empty log array then.
 func Handler(r *Rotator, logs *logBuffer) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("/v1/models", r.handleModels)
 	mux.HandleFunc("/v1/chat/completions", r.handleChat)
+	mux.HandleFunc("/v1/messages", r.handleMessages)
 	mux.HandleFunc("/v1/status", r.handleStatus(logs))
 	mux.HandleFunc("/dashboard", handleDashboard)
 	return r.withAuth(mux)
@@ -764,14 +767,60 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	requestedModel, _ := payload["model"].(string)
+	res, err := r.dispatch(req.Context(), requestedModel, payload)
+	if err != nil {
+		writeError(w, dispatchStatus(err), err.Error())
+		return
+	}
+	tokens := stream(w, res.up)
+	r.recordUsage(res.provider, res.model, tokens)
+	log.Printf("chicco: %s (%s) served %d tokens", res.provider, res.model, tokens)
+}
+
+// dispatchResult is a successful upstream response plus the provider/model that
+// produced it — the caller (handleChat, handleMessages) still owns relaying the
+// body back to its own client in its own wire format.
+type dispatchResult struct {
+	up       *upstream
+	provider string
+	model    string
+}
+
+// dispatchError carries the HTTP status a dispatch failure should surface as,
+// since callers speak different error envelopes (OpenAI vs Anthropic shaped).
+type dispatchError struct {
+	status int
+	msg    string
+}
+
+func (e *dispatchError) Error() string { return e.msg }
+
+// dispatchStatus returns the HTTP status a dispatch error should be reported
+// with, defaulting to 503 for anything that isn't a *dispatchError.
+func dispatchStatus(err error) int {
+	var de *dispatchError
+	if errors.As(err, &de) {
+		return de.status
+	}
+	return http.StatusServiceUnavailable
+}
+
+// dispatch resolves the active provider set for requestedModel, then walks
+// pick() — retrying on transport errors and non-2xx status, applying the same
+// cooldown/health/quota bookkeeping handleChat always has — until one provider
+// answers with a 2xx or every candidate is exhausted/blocked. It mutates
+// payload["model"] in place with each pick before marshaling, so callers must
+// pass an OpenAI chat-completions-shaped payload. Shared by handleChat and
+// handleMessages so failover/cooldown/quota logic lives in exactly one place
+// regardless of which wire format the caller used.
+func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload map[string]any) (*dispatchResult, error) {
 	// Determine which subset of providers to route to based on the requested model.
 	// "chicco:auto" or an unknown model routes across all active providers.
 	// A known virtual model ID restricts routing to its configured backends.
-	requestedModel, _ := payload["model"].(string)
 	active, strategy := r.activeForModel(requestedModel)
 	if len(active) == 0 {
-		writeError(w, http.StatusServiceUnavailable, "chicco: no providers configured with an API key and models")
-		return
+		return nil, &dispatchError{http.StatusServiceUnavailable, "chicco: no providers configured with an API key and models"}
 	}
 
 	var lastErr string
@@ -786,8 +835,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		payload["model"] = model
 		upstreamBody, err := json.Marshal(payload)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "chicco: re-encode body: "+err.Error())
-			return
+			return nil, &dispatchError{http.StatusInternalServerError, "chicco: re-encode body: " + err.Error()}
 		}
 
 		// HTTP providers POST upstream; CLI providers run a subprocess. Both return
@@ -800,9 +848,9 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 			if tl, ok := payload["tools"].([]any); ok && len(tl) > 0 {
 				log.Printf("chicco: %s is a CLI provider — request 'tools' (function-calling) is ignored; it returns plain text", p.Name)
 			}
-			up, err = runCLI(req.Context(), p, model, payload)
+			up, err = runCLI(ctx, p, model, payload)
 		} else {
-			up, err = forward(req.Context(), p, upstreamBody)
+			up, err = forward(ctx, p, upstreamBody)
 		}
 		if err != nil {
 			r.block(p.Name, defaultCooldown, "error")
@@ -824,13 +872,10 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		}
 		log.Printf("chicco: routing to %s (%s)", p.Name, model)
 		r.setHealth(p.Name, HealthOK) // a 2xx proves the provider works
-		tokens := stream(w, up)
-		r.recordUsage(p.Name, model, tokens)
-		log.Printf("chicco: %s (%s) served %d tokens", p.Name, model, tokens)
-		return
+		return &dispatchResult{up: up, provider: p.Name, model: model}, nil
 	}
 
-	writeError(w, http.StatusServiceUnavailable, "chicco: all providers exhausted: "+lastErr)
+	return nil, &dispatchError{http.StatusServiceUnavailable, "chicco: all providers exhausted: " + lastErr}
 }
 
 // upstream is one provider's reply, abstracted over HTTP and CLI so handleChat and

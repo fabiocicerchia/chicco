@@ -10,8 +10,11 @@ A tiny **local OpenAI-compatible rotation proxy**. chicco serves one endpoint an
 forwards each `/v1/chat/completions` request to the next free-tier provider in
 `chicco.yaml`, round-robining models and skipping any provider that hits a quota
 or auth error — so a single stable endpoint fronts a pool of free-tier tokens.
+An Anthropic-compatible `/v1/messages` endpoint sits alongside it, translated
+to and from the same rotation, so Claude Code and other Anthropic-SDK clients
+can point straight at chicco too.
 
-Point any OpenAI client (agent runner, SDK, `curl`) at
+Point any OpenAI (or Anthropic) client (agent runner, SDK, `curl`) at
 `http://127.0.0.1:41986/v1` and your requests transparently cascade across free
 models, moving on to the next one as tokens run out.
 
@@ -359,7 +362,8 @@ local-development requirements.
 
 | Method | Path                    | Purpose                                          |
 |--------|-------------------------|--------------------------------------------------|
-| `POST` | `/v1/chat/completions`  | rotated, proxied chat completion                 |
+| `POST` | `/v1/chat/completions`  | rotated, proxied chat completion (OpenAI-shaped) |
+| `POST` | `/v1/messages`          | rotated, proxied chat completion (Anthropic-shaped) |
 | `GET`  | `/v1/models`            | list virtual model IDs + `chicco:auto`           |
 | `GET`  | `/v1/status`            | JSON snapshot of all providers + recent logs (web dashboard data source) |
 | `GET`  | `/health`               | liveness probe (returns `200`)                   |
