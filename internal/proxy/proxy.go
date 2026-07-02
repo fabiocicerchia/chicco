@@ -568,9 +568,12 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 		}
 
 		type modelStatJSON struct {
-			Name     string `json:"name"`
-			Tokens   int64  `json:"tokens"`
-			Requests int    `json:"requests"`
+			Name          string `json:"name"`
+			Tokens        int64  `json:"tokens"`
+			Requests      int    `json:"requests"`
+			Quota         int64  `json:"quota"` // per-model quota (0 = use the provider's)
+			QuotaIsTokens bool   `json:"quota_is_tokens"`
+			UsedTokens    int64  `json:"used_tokens"` // only meaningful when Quota > 0
 		}
 		type providerStatJSON struct {
 			Name          string          `json:"name"`
@@ -605,7 +608,14 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 		for i, s := range stats {
 			ms := make([]modelStatJSON, len(s.Models))
 			for j, m := range s.Models {
-				ms[j] = modelStatJSON{Name: m.Name, Tokens: m.Tokens, Requests: m.Requests}
+				ms[j] = modelStatJSON{
+					Name:          m.Name,
+					Tokens:        m.Tokens,
+					Requests:      m.Requests,
+					Quota:         m.Quota,
+					QuotaIsTokens: m.QuotaIsTokens,
+					UsedTokens:    m.UsedTokens,
+				}
 			}
 			providers[i] = providerStatJSON{
 				Name:          s.Name,

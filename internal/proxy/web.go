@@ -298,7 +298,14 @@ function dotHTML(p) {
   }
 }
 
-function usageHTML(p, tokens, reqs) {
+// pickQuota returns a model's own quota when it has one (m.quota > 0),
+// otherwise the provider's — same fallback as the TUI (ui.go providerRows).
+function pickQuota(p, m) {
+  if (m && m.quota > 0) return {quota: m.quota, quota_is_tokens: m.quota_is_tokens};
+  return {quota: p.quota, quota_is_tokens: p.quota_is_tokens};
+}
+
+function usageHTML(p, q, tokens, reqs) {
   // Inactive (no api_key/models — never probed), auth, or down: show a badge
   // instead of a bar.
   if (p.inactive)
@@ -314,12 +321,12 @@ function usageHTML(p, tokens, reqs) {
   if (p.cooldown_secs > 0 && p.cooldown_kind === 'limit')
     return '<span class="badge badge-amber">limit · resets ' + esc(fmtReset(p.cooldown_secs)) + '</span>';
 
-  if (p.quota <= 0)
+  if (q.quota <= 0)
     return '<span class="no-quota">(no quota)</span>';
 
-  const pct = Math.min(p.quota_is_tokens
-    ? tokens / p.quota
-    : reqs / p.quota, 1);
+  const pct = Math.min(q.quota_is_tokens
+    ? tokens / q.quota
+    : reqs / q.quota, 1);
   const col = barColor(pct);
   const pctLabel = Math.round(pct * 100) + '%';
   const suffix = p.cooldown_secs > 0
@@ -332,12 +339,12 @@ function usageHTML(p, tokens, reqs) {
     + '</div>';
 }
 
-function usageLabelHTML(p, tokens, reqs) {
-  if (p.quota <= 0)
+function usageLabelHTML(q, tokens, reqs) {
+  if (q.quota <= 0)
     return esc(fmtTok(tokens)) + ' / —';
-  if (p.quota_is_tokens)
-    return esc(fmtTok(tokens)) + ' / ' + esc(fmtTok(p.quota));
-  return reqs + ' / ' + p.quota + ' req';
+  if (q.quota_is_tokens)
+    return esc(fmtTok(tokens)) + ' / ' + esc(fmtTok(q.quota));
+  return reqs + ' / ' + q.quota + ' req';
 }
 
 function renderProviders(providers) {
@@ -347,32 +354,36 @@ function renderProviders(providers) {
   for (const p of providers) {
     const models = p.models && p.models.length > 0 ? p.models : [{name:'—', tokens:0, requests:0}];
 
-    // First row: provider level
+    // First row: provider level (its own aggregate quota, not any one model's)
     const first = models[0];
+    const providerQuota = {quota: p.quota, quota_is_tokens: p.quota_is_tokens};
     rows.push(
       '<tr>',
       '<td>', dotHTML(p), '</td>',
       '<td><strong>', esc(p.name), '</strong></td>',
       '<td style="color:var(--dim)">', esc(p.kind), '</td>',
       '<td style="color:var(--dim)">', esc(first.name), '</td>',
-      '<td>', usageLabelHTML(p, p.used_tokens, p.requests), '</td>',
+      '<td>', usageLabelHTML(providerQuota, p.used_tokens, p.requests), '</td>',
       '<td style="color:var(--dim)">req&nbsp;', p.requests, '</td>',
-      '<td>', usageHTML(p, p.used_tokens, p.requests), '</td>',
+      '<td>', usageHTML(p, providerQuota, p.used_tokens, p.requests), '</td>',
       '</tr>'
     );
 
-    // Continuation rows: one per extra model
+    // Continuation rows: one per extra model, preferring its own quota over
+    // the provider's (see pickQuota).
     for (let i = 1; i < models.length; i++) {
       const m = models[i];
+      const q = pickQuota(p, m);
+      const tokens = m.quota > 0 ? m.used_tokens : m.tokens;
       rows.push(
         '<tr>',
         '<td></td>',
         '<td></td>',
         '<td></td>',
         '<td class="model-cont">', esc(m.name), '</td>',
-        '<td style="color:var(--dim)">', usageLabelHTML(p, m.tokens, m.requests), '</td>',
+        '<td style="color:var(--dim)">', usageLabelHTML(q, tokens, m.requests), '</td>',
         '<td style="color:var(--dim)">req&nbsp;', m.requests, '</td>',
-        '<td>', usageHTML(p, m.tokens, m.requests), '</td>',
+        '<td>', usageHTML(p, q, tokens, m.requests), '</td>',
         '</tr>'
       );
     }
