@@ -72,15 +72,28 @@ type Rotator struct {
 	// needs no separate lock).
 	rrCursor int
 	rng      *rand.Rand
+	// quota is the optional top-level cap from Config.Quota, applied across every
+	// provider combined via the eventLogs[globalKey] log (see pick). Zero Quota{}
+	// (the default) means no aggregate cap.
+	quota Quota
 }
+
+// globalKey is the sentinel eventLogs/blocked/reason key for the optional
+// top-level quota (Config.Quota), which caps usage across every provider
+// combined rather than one. It can't collide with a real key: provider names
+// come from YAML identifiers (no "/"), and per-model keys always contain "/".
+const globalKey = "__global__"
 
 // NewRotator builds a Rotator over the configured providers and virtual model table.
 func NewRotator(providers []Provider, models []Model) *Rotator {
-	// Start with one event log per provider (provider-level quota).
-	logs := make(map[string]*eventLog, len(providers))
+	// Start with one event log per provider (provider-level quota), plus one
+	// sentinel log accumulating every request across all providers combined,
+	// for the optional global quota (see globalKey).
+	logs := make(map[string]*eventLog, len(providers)+1)
 	for _, p := range providers {
 		logs[p.Name] = &eventLog{}
 	}
+	logs[globalKey] = &eventLog{}
 
 	// Build a provider name → Provider map for quick quota lookup below.
 	providerMap := make(map[string]Provider, len(providers))
@@ -141,6 +154,7 @@ func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	if el, ok := r.eventLogs[mk]; ok {
 		el.record(tokens)
 	}
+	r.eventLogs[globalKey].record(tokens) // always present (NewRotator/Reload)
 	r.modelRequests[mk]++
 	r.modelTokens[mk] += tokens
 	r.dirty = true
@@ -239,6 +253,30 @@ func (r *Rotator) Snapshot() []ProviderStat {
 		}
 	}
 	return out
+}
+
+// DailyTotals sums every active provider's dailyTotals() (since UTC midnight)
+// for the dashboard's aggregate usage line. It uses each provider's own
+// eventLog directly rather than Snapshot()'s per-quota-window totals, since
+// providers may use different quota windows (daily/hourly/minutely/none) —
+// summing those directly would be apples-to-oranges. A consistent "since UTC
+// midnight" basis is used for every provider regardless of its own configured
+// quota window.
+func (r *Rotator) DailyTotals() (requests int, tokens int64, activeProviders int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, p := range r.providers {
+		if !p.isActive() {
+			continue
+		}
+		activeProviders++
+		if el, ok := r.eventLogs[p.Name]; ok {
+			req, tok := el.dailyTotals()
+			requests += req
+			tokens += tok
+		}
+	}
+	return
 }
 
 // VirtualModelIDs returns the IDs of all virtual models defined in the routing
@@ -340,6 +378,20 @@ func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bo
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now()
+
+	// Global cap check (optional top-level quota:) — once per pick(), not once
+	// per provider, since it isn't provider-specific. Trips exactly like a
+	// per-provider block: the caller's existing "every provider is in cooldown"
+	// path (a 503) covers it with no new error handling.
+	if r.quota != (Quota{}) {
+		if until := r.eventLogs[globalKey].check(r.quota); until.After(now) {
+			r.blocked[globalKey] = until
+			r.reason[globalKey] = "limit"
+			r.dirty = true
+			return Provider{}, "", false
+		}
+	}
+
 	for _, p := range r.order(active, strategy) {
 		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
 			continue
@@ -641,11 +693,16 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 			logLines = []string{}
 		}
 
+		reqToday, tokToday, activeN := r.DailyTotals()
+
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"providers": providers,
-			"logs":      logLines,
+			"providers":        providers,
+			"logs":             logLines,
+			"requests_today":   reqToday,
+			"tokens_today":     tokToday,
+			"active_providers": activeN,
 		})
 	}
 }

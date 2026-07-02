@@ -28,6 +28,7 @@ func (r *Rotator) Reload(cfg Config) {
 	r.providers = cfg.Providers
 	r.models = cfg.Models
 	r.authKey = cfg.APIKey
+	r.quota = cfg.Quota
 
 	keep := make(map[string]bool, len(cfg.Providers))
 	for _, p := range cfg.Providers {
@@ -38,9 +39,16 @@ func (r *Rotator) Reload(cfg Config) {
 	}
 
 	backendQuotas := make(map[string]Quota)
-	keepKey := make(map[string]bool, len(keep))
+	keepKey := make(map[string]bool, len(keep)+1)
 	for k := range keep {
 		keepKey[k] = true
+	}
+	// The global-quota sentinel log/cooldown isn't tied to any provider — keep it
+	// across every reload, or a SIGHUP would silently drop the running total and
+	// any active global cooldown.
+	keepKey[globalKey] = true
+	if _, ok := r.eventLogs[globalKey]; !ok {
+		r.eventLogs[globalKey] = &eventLog{}
 	}
 	for _, m := range cfg.Models {
 		for _, b := range m.Backends {

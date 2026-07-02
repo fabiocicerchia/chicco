@@ -46,6 +46,7 @@ func Run(opts Options) error {
 
 	rot := NewRotator(cfg.Providers, cfg.Models)
 	rot.authKey = cfg.APIKey // shared secret guarding inbound requests, if set
+	rot.quota = cfg.Quota    // optional cap across every provider combined, if set
 	active := rot.Active()
 	if len(active) == 0 {
 		return fmt.Errorf("no providers with an API key and models are configured —\n"+

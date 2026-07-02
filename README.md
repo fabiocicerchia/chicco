@@ -134,6 +134,39 @@ client ──HTTP──▶ chicco (:41986) ──▶ groq      (llama-3.3-70b-ve
 chicco relies on each provider's own `429` to tell it a free tier is spent; token
 counters are persisted (see below).
 
+## Green usage
+
+Pooling several free tiers is chicco's whole point, but it also removes the
+natural stopping point any single tier would otherwise impose — you never see
+"quota exceeded" until *every* configured provider is exhausted, which grows
+every time you add another one. A few things worth knowing if you'd rather
+keep that pooling deliberate:
+
+- **Model size is the biggest lever, and it's already free.** Per-request
+  compute scales mostly with model size and prompt/response length, far more
+  than with which provider serves it. `models:` (below) already lets you list
+  a virtual model's backends in preference order — put a small/fast model
+  first and a larger one only as fallback.
+- **The dashboard always shows a pooled total** — "today: N req · M tokens
+  across P active" — in both the TUI and `/dashboard`, so the aggregate isn't
+  hidden behind per-provider bars.
+- **An optional top-level `quota:`** caps usage across every provider
+  *combined* (see below) — a self-imposed ceiling on the pooling, not just a
+  view of it.
+- **Carbon-aware routing isn't offered, on purpose.** No OpenAI-compatible API
+  (HTTP or CLI-backed) discloses datacenter region, PUE, or grid carbon
+  intensity per request, and providers route internally and dynamically — there's
+  no real signal for chicco to route on. The closest honest substitute is
+  manual: rank providers in `chicco.yaml` using whatever public sustainability
+  disclosures you trust, the same "config order is preference order" mechanism
+  used for the free-tier-first pattern.
+- **Request coalescing (de-duplicating identical concurrent calls) was
+  considered and skipped.** chicco streams each response live to one caller;
+  coalescing means broadcasting it to several, and non-zero-temperature
+  requests are supposed to return an independent sample each call — collapsing
+  two callers onto one response would silently break that. Revisit only if a
+  shared multi-caller instance shows real duplicate traffic.
+
 ## Configuration — `chicco.yaml`
 
 ```yaml
@@ -159,6 +192,12 @@ providers:
   tightest daily limit also drives the dashboard's usage bar. Use `tpd` for
   token-capped providers (Groq, Cerebras) and `rpd` for request-capped ones
   (Google's free tier). Omit `quota:` to show usage without a bar.
+- A top-level `quota:` (same fields as a provider's) caps usage across every
+  provider *combined* — e.g. `quota: { tpd: 500000 }` stops chicco at 500k
+  tokens/day total, regardless of how many providers are pooled underneath.
+  Optional; omit for no aggregate cap (the default — chicco keeps draining
+  providers until each is individually exhausted). The dashboard's header
+  line always shows the aggregate usage whether or not a cap is set.
 - A provider with an empty key or no models is inactive and skipped at startup.
 - Order is the preference order. List the providers you have keys for.
 

@@ -225,9 +225,12 @@ func (m uiModel) renderModels(w, h int, scroll int, focused bool) string {
 	// real text budget is innerW-2; reserve one more column for the scrollbar.
 	contentW := innerW - 3
 	stats := m.rot.Snapshot()
+	reqToday, tokToday, activeN := m.rot.DailyTotals()
 
 	header := []string{
-		titleStyle.Render("chicco") + dimStyle.Render(fmt.Sprintf(" · %s · %d providers", m.addr, len(stats))),
+		titleStyle.Render("chicco") + dimStyle.Render(fmt.Sprintf(
+			" · %s · %d providers · today: %d req · %s tokens across %d active",
+			m.addr, len(stats), reqToday, fmtTok(tokToday), activeN)),
 		headerStyle.Render(modelRow("", "STATUS", "KIND", "MODEL", "USED / QUOTA", "REQS", "", contentW, true)),
 	}
 	// Collect all provider rows, then apply scroll.

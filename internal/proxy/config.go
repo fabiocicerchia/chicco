@@ -21,6 +21,11 @@ type Config struct {
 	APIKey    string     `yaml:"api_key"`
 	Providers []Provider // populated by UnmarshalYAML from either a list or a map
 	Models    []Model    `yaml:"models"` // virtual model routing table (see Rotator.activeForModel)
+	// Quota, when set, caps usage across every provider combined (same fields as a
+	// provider's own quota:) — the pooled-total ceiling chicco doesn't otherwise
+	// have, since its whole point is to drain one provider's quota and fall
+	// through to the next. Zero value (the default) means no aggregate cap.
+	Quota Quota `yaml:"quota"`
 }
 
 // rawConfig is the intermediate shape used during YAML decoding. providers is
@@ -30,6 +35,7 @@ type rawConfig struct {
 	APIKey    string    `yaml:"api_key"`
 	Providers yaml.Node `yaml:"providers"`
 	Models    []Model   `yaml:"models"`
+	Quota     Quota     `yaml:"quota"`
 }
 
 // UnmarshalYAML lets Config accept providers as either a YAML sequence (list
@@ -44,6 +50,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.Addr = raw.Addr
 	c.APIKey = raw.APIKey
 	c.Models = raw.Models
+	c.Quota = raw.Quota
 
 	n := &raw.Providers
 	// Unwrap a document node if present.
@@ -328,6 +335,9 @@ var (
 // provider is just skipped at startup); the rest are hard errors.
 func (c Config) Validate() []string {
 	var problems []string
+	if c.Quota.RPM < 0 || c.Quota.RPH < 0 || c.Quota.RPD < 0 || c.Quota.TPM < 0 || c.Quota.TPH < 0 || c.Quota.TPD < 0 {
+		problems = append(problems, "quota: must not be negative")
+	}
 	for i, m := range c.Models {
 		where := m.ID
 		if where == "" {

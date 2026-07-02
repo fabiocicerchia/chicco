@@ -26,6 +26,14 @@ addr: ":41986"
 # (every endpoint except /health). ${VAR} is expanded from the environment.
 # api_key: ${CHICCO_API_KEY}
 
+# quota: (optional, top-level) caps usage across every provider COMBINED — same
+# fields as a provider's quota: block (rpm/rph/rpd/tpm/tph/tpd). Omit for no
+# aggregate cap (the default). Useful to bound total spend/usage when pooling
+# several free tiers, since chicco's whole point is to drain them all in
+# sequence rather than stop at the first one's limit.
+# quota:
+#   tpd: 500000
+
 providers:
   groq:
     base_url: https://api.groq.com/openai/v1

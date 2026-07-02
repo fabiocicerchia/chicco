@@ -205,3 +205,41 @@ func TestActiveSkipsUnconfigured(t *testing.T) {
 		t.Errorf("Active() = %+v, want only [ok]", active)
 	}
 }
+
+// TestGlobalQuotaCapsAcrossProviders confirms a top-level quota trips even
+// though the single configured provider has no quota of its own — proving the
+// global cap, not a per-provider one, is what stops the third request.
+func TestGlobalQuotaCapsAcrossProviders(t *testing.T) {
+	working := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer working.Close()
+
+	rot := NewRotator([]Provider{
+		{Name: "a", BaseURL: working.URL, APIKey: "key-a", Models: []string{"m-a"}},
+	}, nil)
+	rot.quota = Quota{RPD: 2}
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+
+	post := func() int {
+		resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",
+			strings.NewReader(`{"model":"whatever","messages":[]}`))
+		if err != nil {
+			t.Fatalf("POST: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := post(); got != http.StatusOK {
+		t.Fatalf("request 1 status = %d, want 200", got)
+	}
+	if got := post(); got != http.StatusOK {
+		t.Fatalf("request 2 status = %d, want 200", got)
+	}
+	if got := post(); got != http.StatusServiceUnavailable {
+		t.Errorf("request 3 status = %d, want 503 (global RPD:2 cap tripped)", got)
+	}
+}

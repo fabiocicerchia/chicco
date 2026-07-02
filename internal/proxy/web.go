@@ -419,7 +419,11 @@ async function poll() {
     const data = await resp.json();
 
     const n = (data.providers || []).length;
-    metaEl.textContent = window.location.host + ' · ' + n + ' provider' + (n === 1 ? '' : 's');
+    const reqToday = data.requests_today || 0;
+    const tokToday = fmtTok(data.tokens_today || 0);
+    const activeN = data.active_providers || 0;
+    metaEl.textContent = window.location.host + ' · ' + n + ' provider' + (n === 1 ? '' : 's')
+      + ' · today: ' + reqToday + ' req · ' + tokToday + ' tokens across ' + activeN + ' active';
 
     renderProviders(data.providers || []);
     renderLogs(data.logs || []);
