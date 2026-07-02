@@ -11,7 +11,8 @@ providers:
     command: sh
     args: ["-c", "sleep 0.5; printf 'Hello! I am %s, answering through chicco.' \"$0\"", "{{model}}"]
     models: [llama-3.3-70b-versatile]
-    quota_tokens: 200000
+    quota:
+      tpd: 200000
     health_command: ["true"]
 
   - name: cerebras
@@ -19,7 +20,8 @@ providers:
     command: sh
     args: ["-c", "sleep 0.4; printf 'Response from %s.' \"$0\"", "{{model}}"]
     models: [llama-3.3-70b]
-    quota_tokens: 1000000
+    quota:
+      tpd: 1000000
     health_command: ["true"]
 
   # Green at boot, but its calls hit a usage limit — the `t` test cools it down,
@@ -29,7 +31,8 @@ providers:
     command: sh
     args: ["-c", "echo 'rate limit reached, try again in 2h 30m' >&2; exit 1"]
     models: [deepseek-chat-v3:free]
-    quota_requests: 50
+    quota:
+      rpd: 50
     health_command: ["true"]
 
   # Rejected key — stays grey (auth failed) throughout.
