@@ -1,0 +1,9 @@
+.git
+bin/
+dist/
+chicco
+chicco-state.json
+chicco.local.yaml*
+*.log
+.env
+docs/demo.gif

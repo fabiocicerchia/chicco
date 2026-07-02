@@ -66,6 +66,20 @@ cosign verify-blob \
 sha256sum --ignore-missing -c checksums.txt
 ```
 
+**Docker:** pull the multi-arch image (keyless-signed with cosign, same
+posture as the checksums above) published by every tagged release, or build
+it yourself from the repo — see [docs/DOCKER.md](docs/DOCKER.md) for the full
+walkthrough (state persistence, env-var keys, signature verification,
+docker-compose):
+
+```sh
+docker pull ghcr.io/fabiocicerchia/chicco:latest
+docker run --rm -p 41986:41986 \
+  -v "$(pwd)/chicco.yaml:/etc/chicco/chicco.yaml:ro" \
+  --env-file .env \
+  ghcr.io/fabiocicerchia/chicco:latest
+```
+
 ## Quick start
 
 ```sh

@@ -28,6 +28,10 @@ install: ## go install into GOBIN
 snapshot: ## Build a local unpublished release with GoReleaser
 	goreleaser release --snapshot --clean
 
+.PHONY: docker-build
+docker-build: ## Build the chicco:latest image (see docs/DOCKER.md to run it)
+	docker build --build-arg VERSION=$(VERSION) -t chicco .
+
 .PHONY: clean
 clean:
 	rm -rf bin dist
