@@ -50,6 +50,28 @@ func TestRenderBarColorAndFill(t *testing.T) {
 	}
 }
 
+// TestScrollbarColumn checks the thumb tracks scroll position and disappears
+// (blank track) once everything fits.
+func TestScrollbarColumn(t *testing.T) {
+	// Fits entirely: no bar, just blanks.
+	for _, c := range scrollbarColumn(5, 10, 0, 10) {
+		if c != " " {
+			t.Fatalf("fits-entirely column = %q, want blank", c)
+		}
+	}
+
+	// Overflowing list: thumb at the top when offset is 0...
+	top := scrollbarColumn(100, 10, 0, 10)
+	if top[0] != "█" || top[len(top)-1] != "│" {
+		t.Errorf("top scroll column = %v, want thumb at index 0", top)
+	}
+	// ...and at the bottom when scrolled all the way to the max offset.
+	bottom := scrollbarColumn(100, 10, 90, 10)
+	if bottom[len(bottom)-1] != "█" || bottom[0] != "│" {
+		t.Errorf("bottom scroll column = %v, want thumb at the last index", bottom)
+	}
+}
+
 // TestViewNoPanic renders the dashboard at a few sizes to catch layout panics.
 func TestViewNoPanic(t *testing.T) {
 	rot := NewRotator([]Provider{

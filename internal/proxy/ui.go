@@ -81,7 +81,19 @@ var (
 	dimStyle    = lipgloss.NewStyle().Foreground(colDim)
 	boxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colDim).Padding(0, 1)
 	headerStyle = lipgloss.NewStyle().Foreground(colDim).Bold(true)
+	// scrollThumbStyle is deliberately brighter than the border/dimStyle grey
+	// (colDim) so the thumb doesn't blend into the box's own border.
+	scrollThumbStyle = lipgloss.NewStyle().Foreground(colGrey)
 )
+
+// renderTrack styles one scrollbarColumn glyph: the thumb ("█") stands out in
+// scrollThumbStyle, the track ("│") and blank column stay dim like the border.
+func renderTrack(glyph string) string {
+	if glyph == "█" {
+		return scrollThumbStyle.Render(glyph)
+	}
+	return dimStyle.Render(glyph)
+}
 
 // ── model ───────────────────────────────────────────────────────────────────
 
@@ -209,17 +221,20 @@ func (m uiModel) View() string {
 func (m uiModel) renderModels(w, h int, scroll int, focused bool) string {
 	innerW := w - 4 // border (2) + horizontal padding (2)
 	innerH := h - 2 // border (2)
+	// boxStyle.Width() counts its own Padding(0, 1) as part of that width, so the
+	// real text budget is innerW-2; reserve one more column for the scrollbar.
+	contentW := innerW - 3
 	stats := m.rot.Snapshot()
 
 	header := []string{
 		titleStyle.Render("chicco") + dimStyle.Render(fmt.Sprintf(" · %s · %d providers", m.addr, len(stats))),
-		headerStyle.Render(modelRow("", "STATUS", "KIND", "MODEL", "USED / QUOTA", "REQS", "", innerW, true)),
+		headerStyle.Render(modelRow("", "STATUS", "KIND", "MODEL", "USED / QUOTA", "REQS", "", contentW, true)),
 	}
 	// Collect all provider rows, then apply scroll.
 	maxRows := innerH - len(header) - 1 // reserve last line for legend
 	var allRows []string
 	for _, s := range stats {
-		allRows = append(allRows, providerRows(s, innerW)...)
+		allRows = append(allRows, providerRows(s, contentW)...)
 	}
 	// Clamp scroll so we never scroll past the last screenful.
 	maxScroll := len(allRows) - maxRows
@@ -237,7 +252,23 @@ func (m uiModel) renderModels(w, h int, scroll int, focused bool) string {
 		visible = visible[:maxRows]
 	}
 
-	lines := append(header, visible...)
+	// One scrollbar glyph per row slot, thumb sized/positioned by how much of
+	// allRows is currently visible — blank when everything fits.
+	track := scrollbarColumn(len(allRows), maxRows, scroll, maxRows)
+	lines := append([]string{}, header...)
+	for i := 0; i < maxRows; i++ {
+		var row string
+		if i < len(visible) {
+			row = visible[i]
+		}
+		// Rows without a usage bar (e.g. "checking…", "(no quota)") are shorter
+		// than contentW — pad so the scrollbar glyph lands on the last column
+		// instead of right after the text.
+		if pad := contentW - lipgloss.Width(row); pad > 0 {
+			row += strings.Repeat(" ", pad)
+		}
+		lines = append(lines, row+renderTrack(track[i]))
+	}
 	lines = append(lines, legendLine())
 
 	style := boxStyle.Width(innerW).Height(innerH)
@@ -264,6 +295,9 @@ func legendLine() string {
 func (m uiModel) renderLogs(w, h int, scroll int, focused bool) string {
 	innerW := w - 4
 	innerH := h - 2
+	// boxStyle.Width() counts its own Padding(0, 1) as part of that width, so the
+	// real text budget is innerW-2; reserve one more column for the scrollbar.
+	contentW := innerW - 3
 	capacity := innerH - 1 // minus the title line
 
 	all := m.logs.allLines()
@@ -278,34 +312,74 @@ func (m uiModel) renderLogs(w, h int, scroll int, focused bool) string {
 	}
 
 	// Select the window: scroll=0 shows the newest lines, scroll=N shows older.
+	// start also doubles as the scrollbar offset: lines scrolled past above it.
 	var window []string
+	start := 0
 	if len(all) > 0 {
 		end := len(all) - scroll
 		if end < 0 {
 			end = 0
 		}
-		start := end - capacity
+		start = end - capacity
 		if start < 0 {
 			start = 0
 		}
 		window = all[start:end]
 	}
 
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("logs"))
-	b.WriteString("\n")
-	for i, ln := range window {
-		b.WriteString(dimStyle.Render(truncate(ln, innerW)))
-		if i < len(window)-1 {
-			b.WriteString("\n")
+	track := scrollbarColumn(len(all), capacity, start, capacity)
+	lines := make([]string, 0, capacity+1)
+	lines = append(lines, titleStyle.Render("logs"))
+	for i := 0; i < capacity; i++ {
+		raw := strings.Repeat(" ", contentW)
+		if i < len(window) {
+			raw = padRight(truncate(window[i], contentW), contentW)
 		}
+		lines = append(lines, dimStyle.Render(raw)+renderTrack(track[i]))
 	}
 
 	style := boxStyle.Width(innerW).Height(innerH)
 	if focused {
 		style = style.BorderForeground(colTitle)
 	}
-	return style.Render(b.String())
+	return style.Render(strings.Join(lines, "\n"))
+}
+
+// scrollbarColumn renders a trackHeight-tall vertical scrollbar for a list of
+// `total` items showing `visible` at a time, with `offset` items scrolled past
+// above the current view (0 = at the top). Each element is one column wide:
+// "█" for the thumb, "│" for the track, or " " when everything already fits
+// (no bar needed).
+func scrollbarColumn(total, visible, offset, trackHeight int) []string {
+	if trackHeight <= 0 {
+		return nil
+	}
+	col := make([]string, trackHeight)
+	if total <= visible || visible <= 0 {
+		for i := range col {
+			col[i] = " "
+		}
+		return col
+	}
+	thumb := trackHeight * visible / total
+	if thumb < 1 {
+		thumb = 1
+	}
+	start := 0
+	if maxOffset := total - visible; maxOffset > 0 {
+		start = offset * (trackHeight - thumb) / maxOffset
+	}
+	if start > trackHeight-thumb {
+		start = trackHeight - thumb
+	}
+	for i := range col {
+		if i >= start && i < start+thumb {
+			col[i] = "█"
+		} else {
+			col[i] = "│"
+		}
+	}
+	return col
 }
 
 // providerRows formats a provider's stat as one row per model. The first row
@@ -394,9 +468,12 @@ func providerRows(s ProviderStat, width int) []string {
 				fmt.Sprintf("req %d", s.Requests),
 				tail, width, false))
 		} else {
-			// Continuation rows: blank name/dot/kind, per-model usage and bar.
-			// When the model has its own quota, use that for the bar; otherwise
-			// fall back to the provider-level quota so the bar stays meaningful.
+			// Continuation rows: blank name/kind, model name in the MODEL
+			// column — same column as the header and the first row, so it
+			// lines up with every other model name in the table. Per-model
+			// usage and bar: when the model has its own quota, use that;
+			// otherwise fall back to the provider-level quota so the bar
+			// stays meaningful.
 			var modelUsage string
 			var modelTail string
 			if ms.Quota > 0 {
@@ -426,11 +503,7 @@ func providerRows(s ProviderStat, width int) []string {
 // would break the row); the dot and tail carry their own ANSI and are placed as-is.
 func modelRow(dot, name, kind, model, usage, reqs, tail string, width int, header bool) string {
 	cell := func(s string, w int) string {
-		s = truncate(s, w-1) // w-1 so a truncated cell keeps a 1-space column gap
-		if pad := w - len([]rune(s)); pad > 0 {
-			s += strings.Repeat(" ", pad)
-		}
-		return s
+		return padRight(truncate(s, w-1), w) // w-1 so a truncated cell keeps a 1-space column gap
 	}
 	if header {
 		return cell("  "+name, 20) + cell(kind, 5) + cell(model, 24) + cell(usage, 18) + cell(reqs, 9) + "USAGE"
@@ -486,6 +559,15 @@ func fmtTok(n int64) string {
 	default:
 		return fmt.Sprintf("%d", n)
 	}
+}
+
+// padRight pads s with spaces to width w (rune-aware); a no-op if s already
+// fills or exceeds w.
+func padRight(s string, w int) string {
+	if pad := w - len([]rune(s)); pad > 0 {
+		return s + strings.Repeat(" ", pad)
+	}
+	return s
 }
 
 func truncate(s string, w int) string {
