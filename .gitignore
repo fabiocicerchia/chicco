@@ -3,5 +3,5 @@
 /chicco
 chicco-state.json
 *.log
-chicco.local.yaml
+chicco.local.yaml*
 .env
