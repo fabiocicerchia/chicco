@@ -108,7 +108,7 @@ const dashboardHTML = `<!DOCTYPE html>
     white-space: nowrap;
     vertical-align: middle;
   }
-  td.model-cont { color: var(--dim); padding-left: 28px; }
+  td.model-cont { color: var(--dim); }
 
   /* ── status dot ── */
   .dot {
