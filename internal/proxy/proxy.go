@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,6 +67,11 @@ type Rotator struct {
 	// /health) must present as `Authorization: Bearer <key>`. Empty leaves chicco
 	// open (the localhost default). Set once at startup, read-only thereafter.
 	authKey string
+	// rrCursor advances the round-robin start (shared across virtual models — see
+	// order); rng drives the random/weighted orders (used only under r.mu, so it
+	// needs no separate lock).
+	rrCursor int
+	rng      *rand.Rand
 }
 
 // NewRotator builds a Rotator over the configured providers and virtual model table.
@@ -110,6 +116,7 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		modelRequests: map[string]int{},
 		health:        map[string]Health{},
 		reason:        map[string]string{},
+		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -153,17 +160,17 @@ type ModelStat struct {
 
 // ProviderStat is a snapshot of one provider's live state for the dashboard.
 type ProviderStat struct {
-	Name           string
-	Kind           string // "http" | "cli"
-	Models         []ModelStat
-	Quota          int64  // effective quota value (0 = no bar); derived from TPD/RPD/TPH/…
-	QuotaIsTokens  bool   // true → Quota is a token cap; false → request cap
-	QuotaWindow    string // "daily" | "hourly" | "minutely" | "none"
-	UsedTokens     int64
-	Requests       int
-	CooldownLeft   time.Duration // 0 when available
-	CooldownKind   string        // "limit" | "auth" | "error" when CooldownLeft > 0
-	Health         Health
+	Name          string
+	Kind          string // "http" | "cli"
+	Models        []ModelStat
+	Quota         int64  // effective quota value (0 = no bar); derived from TPD/RPD/TPH/…
+	QuotaIsTokens bool   // true → Quota is a token cap; false → request cap
+	QuotaWindow   string // "daily" | "hourly" | "minutely" | "none"
+	UsedTokens    int64
+	Requests      int
+	CooldownLeft  time.Duration // 0 when available
+	CooldownKind  string        // "limit" | "auth" | "error" when CooldownLeft > 0
+	Health        Health
 }
 
 // Snapshot returns the current per-provider stats (all configured providers, in
@@ -239,13 +246,15 @@ func (r *Rotator) VirtualModelIDs() []string {
 }
 
 // activeForModel returns the subset of active providers that back a named virtual
-// model, each trimmed to only the backend model(s) listed for that virtual model.
-// For "chicco:auto" (or when the requested model doesn't match any virtual model)
-// it returns all active providers unchanged.
-func (r *Rotator) activeForModel(requested string) []Provider {
+// model, each trimmed to only the backend model(s) listed for that virtual model,
+// plus the load-balancing strategy configured on that virtual model. For
+// "chicco:auto" (or when the requested model doesn't match any virtual model) it
+// returns all active providers unchanged and the "order" (config order) strategy,
+// since there's no virtual model to carry one.
+func (r *Rotator) activeForModel(requested string) (providers []Provider, strategy string) {
 	all := r.Active()
 	if requested == "chicco:auto" || requested == "" {
-		return all
+		return all, "order"
 	}
 	// Find the virtual model definition.
 	var vm *Model
@@ -258,7 +267,7 @@ func (r *Rotator) activeForModel(requested string) []Provider {
 	if vm == nil {
 		// Unknown model — fall back to full rotation so the caller gets a useful
 		// response rather than a 503.
-		return all
+		return all, "order"
 	}
 	// Build a lookup: provider name → list of backend model names for this VM.
 	backendModels := make(map[string][]string, len(vm.Backends))
@@ -278,7 +287,7 @@ func (r *Rotator) activeForModel(requested string) []Provider {
 			out = append(out, pc)
 		}
 	}
-	return out
+	return out, vm.Strategy
 }
 
 // Active returns the providers usable for routing: those with at least one model
@@ -298,21 +307,21 @@ func (r *Rotator) Active() []Provider {
 	return out
 }
 
-// pick returns the first provider not in cooldown, in config order, and its next
-// model. Config order is preference order: the top entry is used until it is
-// exhausted (rate-limited into cooldown), then the next, so a free tier is drained
-// before falling through. ok is false when every active provider is blocked.
+// pick returns the first provider not in cooldown — in the order set by the
+// requested virtual model's load-balancing strategy ("order", config order, when
+// the request doesn't match a virtual model) — and its next model. ok is false
+// when every active provider is blocked.
 // It also enforces client-side rate limits (RPM/RPH/RPD/TPM/TPH/TPD): if the
 // event log shows a limit would be breached, the provider is put in cooldown
 // until the oldest event in that window expires.
 // When a backend has a per-model quota, that quota is checked against the
 // per-model event log (keyed "provider/model") instead of the provider-level one,
 // giving each model its own independent rate-limit window.
-func (r *Rotator) pick(active []Provider) (Provider, string, bool) {
+func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now()
-	for _, p := range active {
+	for _, p := range r.order(active, strategy) {
 		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
 			continue
 		}
@@ -354,6 +363,78 @@ func (r *Rotator) pick(active []Provider) (Provider, string, bool) {
 		return p, model, true
 	}
 	return Provider{}, "", false
+}
+
+// order returns the active providers in the sequence pick should try them, per the
+// requested virtual model's load-balancing strategy. The caller must hold r.mu.
+//   - "" / "order":  config order — the top provider is drained (used until it is
+//     rate-limited into cooldown), then the request falls through to
+//     the next, so a free tier is spent before the fallback. Default.
+//   - "round_robin": rotate the starting provider each pick, spreading load evenly
+//     instead of always hammering the top entry.
+//   - "random":      a fresh random order each pick.
+//   - "weighted":    a random order biased by each provider's weight, so a provider
+//     with weight 3 leads the order ~3× as often as one with weight 1.
+//
+// Whatever the order, pick still skips providers in cooldown and handleChat still
+// fails over down the list, so a strategy only changes preference, never
+// correctness.
+func (r *Rotator) order(active []Provider, strategy string) []Provider {
+	switch strategy {
+	case "round_robin":
+		if len(active) == 0 {
+			return active
+		}
+		out := make([]Provider, len(active))
+		start := r.rrCursor % len(active)
+		r.rrCursor++
+		for i := range active {
+			out[i] = active[(start+i)%len(active)]
+		}
+		return out
+	case "random":
+		out := append([]Provider(nil), active...)
+		r.rng.Shuffle(len(out), func(i, j int) { out[i], out[j] = out[j], out[i] })
+		return out
+	case "weighted":
+		return r.weightedOrder(active)
+	default:
+		return active
+	}
+}
+
+// weightedOrder returns a random permutation of active biased by provider weight:
+// it repeatedly draws the next provider with probability proportional to its weight
+// among those not yet placed. The caller must hold r.mu.
+func (r *Rotator) weightedOrder(active []Provider) []Provider {
+	pool := append([]Provider(nil), active...)
+	out := make([]Provider, 0, len(pool))
+	for len(pool) > 0 {
+		total := 0
+		for _, p := range pool {
+			total += providerWeight(p)
+		}
+		x := r.rng.Intn(total)
+		idx := len(pool) - 1
+		for i, p := range pool {
+			if x -= providerWeight(p); x < 0 {
+				idx = i
+				break
+			}
+		}
+		out = append(out, pool[idx])
+		pool = append(pool[:idx], pool[idx+1:]...)
+	}
+	return out
+}
+
+// providerWeight is a provider's load-balancing weight, defaulting an unset/0 weight
+// to 1 so every provider participates.
+func providerWeight(p Provider) int {
+	if p.Weight > 0 {
+		return p.Weight
+	}
+	return 1
 }
 
 // block puts a provider in cooldown until now+d, recording why ("limit" = usage
@@ -592,7 +673,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 	// "chicco:auto" or an unknown model routes across all active providers.
 	// A known virtual model ID restricts routing to its configured backends.
 	requestedModel, _ := payload["model"].(string)
-	active := r.activeForModel(requestedModel)
+	active, strategy := r.activeForModel(requestedModel)
 	if len(active) == 0 {
 		writeError(w, http.StatusServiceUnavailable, "chicco: no providers configured with an API key and models")
 		return
@@ -600,7 +681,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 
 	var lastErr string
 	for range active {
-		p, model, ok := r.pick(active)
+		p, model, ok := r.pick(active, strategy)
 		if !ok {
 			break // every provider is in cooldown
 		}

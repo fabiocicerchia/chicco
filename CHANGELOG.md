@@ -25,7 +25,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Optional inbound `api_key` shared secret: when set, every endpoint except
   `/health` requires `Authorization: Bearer <key>` (constant-time compared).
 - `-check` flag: statically validate the config (bad YAML, `kind: cli` without
-  `command`, unknown `window`/`output`, duplicate names, …) and exit, without
-  binding a port — safe for CI / pre-commit.
+  `command`, unknown `kind`/`output`/model `strategy`, duplicate names, …) and
+  exit, without binding a port — safe for CI / pre-commit.
+- Per-model load-balancing `strategy` (`order` default, `round_robin`, `random`,
+  `weighted`) set on each virtual model in `models:`, with a per-provider
+  `weight`, to spread load instead of always draining the top backend. A
+  request that doesn't match a virtual model always uses plain config order.
 
 [Unreleased]: https://github.com/fabiocicerchia/chicco/commits/main

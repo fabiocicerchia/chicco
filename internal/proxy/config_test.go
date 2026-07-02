@@ -67,3 +67,18 @@ func TestValidateCleanConfig(t *testing.T) {
 		t.Errorf("clean config reported problems: %v", problems)
 	}
 }
+
+// TestValidateModelStrategy checks strategy validation is per virtual model: an
+// unknown strategy is flagged by name.
+func TestValidateModelStrategy(t *testing.T) {
+	cfg := Config{
+		Providers: []Provider{{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}}},
+		Models: []Model{
+			{ID: "bad", Strategy: "fifo", Backends: []Backend{{Provider: "a", Model: "m"}}},
+		},
+	}
+	problems := cfg.Validate()
+	if !hasProblem(problems, `model bad: unknown strategy "fifo"`) {
+		t.Errorf("expected unknown-strategy problem for model bad, got %v", problems)
+	}
+}

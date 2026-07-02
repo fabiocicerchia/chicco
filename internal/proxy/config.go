@@ -127,6 +127,11 @@ type Provider struct {
 	// CLI provider fields (kind: cli). Instead of an HTTP call, chicco runs Command
 	// with Args (templated with {{model}}/{{system}}/{{user}}/{{prompt}}/{{output_file}}),
 	// buffers the completion, and synthesizes the OpenAI SSE the caller expects.
+	// Weight biases the "weighted" load-balancing strategy: a provider with weight 3
+	// is picked roughly 3× as often as one with weight 1. Unset/0 counts as 1.
+	// Ignored by the other strategies.
+	Weight int `yaml:"weight"`
+
 	Kind          string   `yaml:"kind"`            // "" / "http" (default) | "cli"
 	Command       string   `yaml:"command"`         // tool to run, e.g. "claude"
 	Args          []string `yaml:"args"`            // templated argv
@@ -169,10 +174,15 @@ func (p Provider) effectiveQuota() (quota int64, isTokens bool, window string) {
 }
 
 // Model is a named virtual model that routes across one or more provider backends.
-// Not yet wired into the rotator — present so the models: section parses cleanly.
 type Model struct {
-	ID       string    `yaml:"id"`
-	Strategy string    `yaml:"strategy"` // "rotate" | "failover"
+	ID string `yaml:"id"`
+	// Strategy is the load-balancing order across this model's backends: "" /
+	// "order" (config order — drain the top backend, then fall through; the
+	// default), "round_robin" (rotate the starting backend each request),
+	// "random", or "weighted" (biased by each backend provider's weight). See
+	// Rotator.order. Requests that don't match a virtual model (chicco:auto or
+	// an unknown model) always use "order" across all active providers.
+	Strategy string    `yaml:"strategy"`
 	Backends []Backend `yaml:"backends"`
 }
 
@@ -293,8 +303,9 @@ func resolveModels(c *Config) {
 // typo (e.g. `kind: htpp`) is caught by `chicco -check` instead of silently
 // behaving like the default.
 var (
-	knownOutputs = map[string]bool{"": true, "text": true, "json": true}
-	knownKinds   = map[string]bool{"": true, "http": true, "cli": true}
+	knownOutputs    = map[string]bool{"": true, "text": true, "json": true}
+	knownKinds      = map[string]bool{"": true, "http": true, "cli": true}
+	knownStrategies = map[string]bool{"": true, "order": true, "round_robin": true, "random": true, "weighted": true}
 )
 
 // Validate checks a loaded Config for mistakes that would make a provider unusable
@@ -305,6 +316,16 @@ var (
 // provider is just skipped at startup); the rest are hard errors.
 func (c Config) Validate() []string {
 	var problems []string
+	for i, m := range c.Models {
+		where := m.ID
+		if where == "" {
+			where = fmt.Sprintf("models[%d]", i)
+		}
+		if !knownStrategies[m.Strategy] {
+			problems = append(problems, "model "+where+": unknown strategy "+strconv.Quote(m.Strategy)+
+				` (want "order", "round_robin", "random" or "weighted")`)
+		}
+	}
 	if len(c.Providers) == 0 {
 		return []string{"no providers configured"}
 	}
@@ -335,6 +356,9 @@ func (c Config) Validate() []string {
 		}
 		if p.TimeoutSecs < 0 {
 			problems = append(problems, where+": timeout_seconds must not be negative")
+		}
+		if p.Weight < 0 {
+			problems = append(problems, where+": weight must not be negative")
 		}
 
 		if p.Kind == "cli" {
