@@ -509,8 +509,8 @@ func parseRetryAfter(h string) time.Duration {
 // Handler returns the HTTP handler: /v1/chat/completions is rotated across
 // providers; /v1/models lists available virtual models; /health is a liveness
 // probe; /v1/status exposes a JSON snapshot for the web dashboard; /dashboard
-// serves the live HTML dashboard page. logs may be nil (headless mode) — the
-// status endpoint will return an empty log array in that case.
+// serves the live HTML dashboard page. logs may be nil (e.g. a caller with no
+// use for log history) — the status endpoint returns an empty log array then.
 func Handler(r *Rotator, logs *logBuffer) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })

@@ -7,6 +7,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -81,16 +82,21 @@ func Run(opts Options) error {
 		}()
 	}
 
+	// Always keep a log buffer so /v1/status (the web dashboard) has something to
+	// show even headless — it's the only UI in that mode, so its logs panel can't
+	// rely on the TUI being the one populating it.
+	logs := newLogBuffer(500)
+
 	// Fall back to plain logging when asked or when stdout isn't a terminal (piped,
 	// systemd, etc.) — the dashboard needs a real TTY.
 	if opts.Headless || !isatty.IsTerminal(os.Stdout.Fd()) {
+		log.SetOutput(io.MultiWriter(os.Stderr, logs)) // keep stderr; also feed the web dashboard
 		log.Printf("chicco %s listening on %s — rotating across %d provider(s): %v", opts.Version, cfg.Addr, len(active), names)
-		srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, nil), ReadHeaderTimeout: readHeaderTimeout}
+		srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
 		return srv.ListenAndServe()
 	}
 
 	// Dashboard mode: logs flow into the on-screen pane, not stderr.
-	logs := newLogBuffer(500)
 	log.SetOutput(logs)
 	log.SetFlags(log.Ltime)
 
