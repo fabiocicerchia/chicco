@@ -12,7 +12,9 @@ forwards each `/v1/chat/completions` request to the next free-tier provider in
 or auth error — so a single stable endpoint fronts a pool of free-tier tokens.
 An Anthropic-compatible `/v1/messages` endpoint sits alongside it, translated
 to and from the same rotation, so Claude Code and other Anthropic-SDK clients
-can point straight at chicco too.
+can point straight at chicco too. An OpenAI-compatible `/v1/embeddings` endpoint
+rotates the same way (across HTTP providers — CLI backends return text, not
+vectors, so they're skipped for embeddings).
 
 Point any OpenAI (or Anthropic) client (agent runner, SDK, `curl`) at
 `http://127.0.0.1:41986/v1` and your requests transparently cascade across free
@@ -364,6 +366,7 @@ local-development requirements.
 |--------|-------------------------|--------------------------------------------------|
 | `POST` | `/v1/chat/completions`  | rotated, proxied chat completion (OpenAI-shaped) |
 | `POST` | `/v1/messages`          | rotated, proxied chat completion (Anthropic-shaped) |
+| `POST` | `/v1/embeddings`        | rotated, proxied embeddings (OpenAI-shaped); HTTP providers only |
 | `GET`  | `/v1/models`            | list virtual model IDs + `chicco:auto`           |
 | `GET`  | `/v1/status`            | JSON snapshot of all providers + recent logs (web dashboard data source) |
 | `GET`  | `/health`               | liveness probe (returns `200`)                   |

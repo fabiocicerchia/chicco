@@ -1,10 +1,12 @@
-// Command chicco is a local OpenAI-compatible rotation proxy. It listens on one
-// endpoint (default :41986) and forwards each /v1/chat/completions request to the
-// next upstream free-tier provider listed in chicco.yaml, round-robining models
-// and skipping providers that hit a quota/rate-limit (429) or auth (401/403)
-// error until one answers. Point any OpenAI client at http://127.0.0.1:41986/v1
-// and free-tier tokens rotate underneath a single stable endpoint. See the
-// README for details.
+// Command chicco is a local OpenAI- and Anthropic-compatible rotation proxy. It
+// listens on one endpoint (default :41986) and forwards each request —
+// /v1/chat/completions, /v1/messages, or /v1/embeddings — to the next upstream
+// provider listed in chicco.yaml, round-robining models and skipping providers
+// that hit a quota/rate-limit (429) or auth (401/403) error until one answers.
+// Providers can be HTTP APIs or local CLI subprocesses. Point any OpenAI or
+// Anthropic client at http://127.0.0.1:41986/v1 and free-tier tokens rotate
+// underneath a single stable endpoint, with per-model usage persisted to disk.
+// See the README for details.
 package main
 
 import (
@@ -79,12 +81,12 @@ func checkConfig(path string) int {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `chicco — a local OpenAI-compatible rotation proxy.
+	fmt.Fprintf(os.Stderr, `chicco — a local OpenAI- and Anthropic-compatible rotation proxy.
 
-chicco serves one OpenAI-compatible endpoint and forwards each chat-completion
-request to the next free-tier provider in chicco.yaml, rotating models and
-skipping providers that run out of quota, so a single stable endpoint fronts a
-pool of free-tier tokens.
+chicco serves one endpoint (chat completions, messages and embeddings) and
+forwards each request to the next provider in chicco.yaml — an HTTP API or a
+local CLI — rotating models and skipping providers that run out of quota, so a
+single stable endpoint fronts a pool of free-tier tokens.
 
 Usage:
   chicco [flags]

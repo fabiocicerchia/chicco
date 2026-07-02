@@ -156,7 +156,7 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 				"function": map[string]any{
 					"name":        t.Name,
 					"description": t.Description,
-					"parameters":  json.RawMessage(t.InputSchema),
+					"parameters":  t.InputSchema,
 				},
 			}
 		}
