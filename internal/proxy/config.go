@@ -20,7 +20,7 @@ type Config struct {
 	// chicco beyond localhost. ${VAR} is expanded from the environment.
 	APIKey    string     `yaml:"api_key"`
 	Providers []Provider // populated by UnmarshalYAML from either a list or a map
-	Models    []Model    `yaml:"models"` // forward-looking routing table (not yet wired up)
+	Models    []Model    `yaml:"models"` // virtual model routing table (see Rotator.activeForModel)
 }
 
 // rawConfig is the intermediate shape used during YAML decoding. providers is

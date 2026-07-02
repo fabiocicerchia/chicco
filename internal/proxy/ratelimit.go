@@ -134,11 +134,6 @@ func (el *eventLog) check(q Quota) time.Time {
 	return blockedUntil
 }
 
-// persistedEvents is the on-disk shape for a single provider's event log.
-type persistedEvents struct {
-	Events []event `json:"events"`
-}
-
 // toSlice returns all valid events as a slice (for persistence).
 func (el *eventLog) toSlice() []event {
 	out := make([]event, el.size)
