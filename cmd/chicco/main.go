@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fabiocicerchia/chicco/internal/proxy"
 )
@@ -23,6 +24,7 @@ func main() {
 	addr := flag.String("addr", "", "listen address (overrides chicco.yaml; default "+proxy.DefaultAddr+")")
 	statePath := flag.String("state", "chicco-state.json", "token-usage state file, persisted across runs (empty to disable)")
 	headless := flag.Bool("headless", false, "disable the dashboard and log plainly to stderr")
+	check := flag.Bool("check", false, "validate the config and exit (no server, no port bound)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Usage = usage
 	flag.Parse()
@@ -30,6 +32,10 @@ func main() {
 	if *showVersion {
 		fmt.Println("chicco", version)
 		return
+	}
+
+	if *check {
+		os.Exit(checkConfig(*cfgPath))
 	}
 
 	if err := proxy.Run(proxy.Options{
@@ -42,6 +48,34 @@ func main() {
 		fmt.Fprintln(os.Stderr, "chicco:", err)
 		os.Exit(1)
 	}
+}
+
+// checkConfig loads and validates the config without starting anything, printing
+// each problem, and returns the process exit code (0 = sound, 1 = failed). Warnings
+// (inactive providers) are printed but don't fail the check on their own — only a
+// parse error or a hard validation problem does.
+func checkConfig(path string) int {
+	cfg, err := proxy.LoadConfig(path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "chicco:", err)
+		return 1
+	}
+	problems := cfg.Validate()
+	if len(problems) == 0 {
+		fmt.Printf("chicco: %s is valid\n", path)
+		return 0
+	}
+	hardErrors := false
+	for _, p := range problems {
+		fmt.Fprintln(os.Stderr, "chicco:", p)
+		if !strings.HasPrefix(p, "warning:") {
+			hardErrors = true
+		}
+	}
+	if hardErrors {
+		return 1
+	}
+	return 0
 }
 
 func usage() {

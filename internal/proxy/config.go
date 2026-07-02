@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -286,4 +287,76 @@ func resolveModels(c *Config) {
 			c.Providers[i].Models = append(c.Providers[i].Models, b.Model)
 		}
 	}
+}
+
+// knownOutputs / knownKinds are the accepted enum values, checked by Validate so a
+// typo (e.g. `kind: htpp`) is caught by `chicco -check` instead of silently
+// behaving like the default.
+var (
+	knownOutputs = map[string]bool{"": true, "text": true, "json": true}
+	knownKinds   = map[string]bool{"": true, "http": true, "cli": true}
+)
+
+// Validate checks a loaded Config for mistakes that would make a provider unusable
+// or a field silently ignored, returning a human-readable problem for each. It is
+// what `chicco -check` reports; an empty result means the config is sound. It does
+// not open sockets or run any provider — a static check safe to run in CI or a
+// pre-commit hook. Problems prefixed "warning:" don't make the config invalid (the
+// provider is just skipped at startup); the rest are hard errors.
+func (c Config) Validate() []string {
+	var problems []string
+	if len(c.Providers) == 0 {
+		return []string{"no providers configured"}
+	}
+	seen := map[string]bool{}
+	active := 0
+	for i, p := range c.Providers {
+		where := p.Name
+		if where == "" {
+			where = fmt.Sprintf("providers[%d]", i)
+			problems = append(problems, where+": missing name")
+		}
+		if p.Name != "" && seen[p.Name] {
+			problems = append(problems, where+": duplicate provider name")
+		}
+		seen[p.Name] = true
+
+		if !knownKinds[p.Kind] {
+			problems = append(problems, where+": unknown kind "+strconv.Quote(p.Kind)+` (want "http" or "cli")`)
+		}
+		if !knownOutputs[p.Output] {
+			problems = append(problems, where+": unknown output "+strconv.Quote(p.Output)+` (want "text" or "json")`)
+		}
+		if p.Output == "json" && p.ResultPath == "" {
+			problems = append(problems, where+`: output: json needs a result_path`)
+		}
+		if p.Quota.RPM < 0 || p.Quota.RPH < 0 || p.Quota.RPD < 0 || p.Quota.TPM < 0 || p.Quota.TPH < 0 || p.Quota.TPD < 0 {
+			problems = append(problems, where+": quota must not be negative")
+		}
+		if p.TimeoutSecs < 0 {
+			problems = append(problems, where+": timeout_seconds must not be negative")
+		}
+
+		if p.Kind == "cli" {
+			if p.Command == "" {
+				problems = append(problems, where+": kind: cli needs a command")
+			}
+		} else if p.BaseURL == "" {
+			problems = append(problems, where+": missing base_url")
+		}
+
+		// Would this provider actually route? (mirrors Rotator.Active)
+		switch {
+		case len(p.Models) == 0:
+			problems = append(problems, "warning: "+where+": no models — provider is inactive")
+		case p.Kind != "cli" && p.APIKey == "":
+			problems = append(problems, "warning: "+where+": no api_key (unset env var?) — provider is inactive")
+		default:
+			active++
+		}
+	}
+	if active == 0 {
+		problems = append(problems, "warning: no active providers (none have both models and, for http, an api_key)")
+	}
+	return problems
 }

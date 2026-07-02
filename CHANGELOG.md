@@ -24,5 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   defined in `chicco.yaml`.
 - Optional inbound `api_key` shared secret: when set, every endpoint except
   `/health` requires `Authorization: Bearer <key>` (constant-time compared).
+- `-check` flag: statically validate the config (bad YAML, `kind: cli` without
+  `command`, unknown `window`/`output`, duplicate names, …) and exit, without
+  binding a port — safe for CI / pre-commit.
 
 [Unreleased]: https://github.com/fabiocicerchia/chicco/commits/main

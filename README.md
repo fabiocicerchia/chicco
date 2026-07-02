@@ -265,7 +265,14 @@ Flags:
 | `-addr`      | (from config)        | listen address, overrides `chicco.yaml`          |
 | `-state`     | `chicco-state.json`  | token-usage state file (empty disables it)       |
 | `-headless`  | `false`              | disable the dashboard; log plainly to stderr     |
+| `-check`     | `false`              | validate the config and exit (no server)         |
 | `-version`   | —                    | print version and exit                           |
+
+`chicco -check -config chicco.yaml` statically validates the config — bad YAML,
+a `kind: cli` provider missing `command`, an `http` provider missing `base_url`,
+unknown `window`/`output` values, duplicate names — and exits non-zero on any
+hard error (warnings for inactive providers don't fail it). It binds no port, so
+it's safe in CI or a pre-commit hook.
 
 `chicco -help` prints full usage.
 
