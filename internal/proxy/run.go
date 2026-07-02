@@ -16,6 +16,12 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
+// readHeaderTimeout bounds how long a client gets to send request headers,
+// closing off slowloris-style connections that trickle bytes to hold a socket
+// open. It only guards the header read, not the body or a streamed response,
+// so long-running chat completions are unaffected.
+const readHeaderTimeout = 10 * time.Second
+
 // Options configures a chicco run. All fields come from cmd/chicco flags.
 type Options struct {
 	ConfigPath string
@@ -79,7 +85,8 @@ func Run(opts Options) error {
 	// systemd, etc.) — the dashboard needs a real TTY.
 	if opts.Headless || !isatty.IsTerminal(os.Stdout.Fd()) {
 		log.Printf("chicco %s listening on %s — rotating across %d provider(s): %v", opts.Version, cfg.Addr, len(active), names)
-		return http.ListenAndServe(cfg.Addr, Handler(rot, nil))
+		srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, nil), ReadHeaderTimeout: readHeaderTimeout}
+		return srv.ListenAndServe()
 	}
 
 	// Dashboard mode: logs flow into the on-screen pane, not stderr.
@@ -87,7 +94,7 @@ func Run(opts Options) error {
 	log.SetOutput(logs)
 	log.SetFlags(log.Ltime)
 
-	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs)}
+	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
 	go func() {
 		log.Printf("chicco %s listening on %s — %d provider(s): %v", opts.Version, cfg.Addr, len(active), names)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
