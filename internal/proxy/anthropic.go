@@ -47,7 +47,7 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 	payload["stream"] = true
 	payload["stream_options"] = map[string]any{"include_usage": true}
 
-	res, err := r.dispatch(req.Context(), requestedModel, payload)
+	res, err := r.dispatch(req.Context(), requestedModel, payload, "/chat/completions")
 	if err != nil {
 		writeAnthropicError(w, dispatchStatus(err), "overloaded_error", err.Error())
 		return

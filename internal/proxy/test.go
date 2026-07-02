@@ -91,7 +91,7 @@ func testOne(ctx context.Context, p Provider, model string) testResult {
 		up, err = runCLI(cctx, p, model, payload)
 	} else {
 		body, _ := json.Marshal(payload)
-		up, err = forward(cctx, p, body)
+		up, err = forward(cctx, p, body, "/chat/completions")
 	}
 	if err != nil {
 		return testResult{status: http.StatusBadGateway, errMsg: err.Error()}

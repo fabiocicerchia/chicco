@@ -76,6 +76,39 @@ func TestRotationFailover(t *testing.T) {
 	}
 }
 
+// TestEmbeddingsSkipsCLI confirms an embeddings request never lands on a CLI
+// provider (which returns chat text, not vectors) even when one sorts first, and
+// that the HTTP provider it does reach is hit on /embeddings.
+func TestEmbeddingsSkipsCLI(t *testing.T) {
+	var gotPath string
+	http4 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		io.WriteString(w, `{"data":[{"embedding":[0.1]}],"usage":{"total_tokens":3}}`)
+	}))
+	defer http4.Close()
+
+	rot := NewRotator([]Provider{
+		{Name: "cli-first", Kind: "cli", Command: "sh", Args: []string{"-c", "printf notavector"}, Models: []string{"m"}},
+		{Name: "http", BaseURL: http4.URL, APIKey: "k", Models: []string{"embed-model"}},
+	}, nil)
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/v1/embeddings", "application/json",
+		strings.NewReader(`{"model":"chicco:auto","input":"hi"}`))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	if gotPath != "/embeddings" {
+		t.Errorf("upstream path = %q, want /embeddings (request never reached HTTP provider)", gotPath)
+	}
+	if !strings.Contains(string(out), `"embedding"`) {
+		t.Errorf("body = %q, want the HTTP provider's embedding, not CLI text", out)
+	}
+}
+
 // TestModelOverride confirms the requested model is replaced by the rotation's
 // configured model before forwarding upstream.
 func TestModelOverride(t *testing.T) {

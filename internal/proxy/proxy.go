@@ -12,6 +12,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -570,6 +571,7 @@ func Handler(r *Rotator, logs *logBuffer) http.Handler {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("/v1/models", r.handleModels)
 	mux.HandleFunc("/v1/chat/completions", r.handleChat)
+	mux.HandleFunc("/v1/embeddings", r.handleEmbeddings)
 	mux.HandleFunc("/v1/messages", r.handleMessages)
 	mux.HandleFunc("/v1/status", r.handleStatus(logs))
 	mux.HandleFunc("/dashboard", handleDashboard)
@@ -768,7 +770,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 	}
 
 	requestedModel, _ := payload["model"].(string)
-	res, err := r.dispatch(req.Context(), requestedModel, payload)
+	res, err := r.dispatch(req.Context(), requestedModel, payload, "/chat/completions")
 	if err != nil {
 		writeError(w, dispatchStatus(err), err.Error())
 		return
@@ -776,6 +778,56 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 	tokens := stream(w, res.up)
 	r.recordUsage(res.provider, res.model, tokens)
 	log.Printf("chicco: %s (%s) served %d tokens", res.provider, res.model, tokens)
+}
+
+// handleEmbeddings forwards one embeddings request the same way handleChat forwards
+// a chat completion — rotation, cooldown and quota bookkeeping all go through the
+// shared dispatch(). Embeddings responses are a single JSON object, never streamed,
+// so unlike handleChat this reads the upstream body fully and relays it verbatim.
+func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "chicco: read body: "+err.Error())
+		return
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, "chicco: invalid JSON body: "+err.Error())
+		return
+	}
+
+	requestedModel, _ := payload["model"].(string)
+	res, err := r.dispatch(req.Context(), requestedModel, payload, "/embeddings")
+	if err != nil {
+		writeError(w, dispatchStatus(err), err.Error())
+		return
+	}
+	defer res.up.body.Close()
+	respBody, err := io.ReadAll(res.up.body)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "chicco: read upstream response: "+err.Error())
+		return
+	}
+	var parsed struct {
+		Usage struct {
+			TotalTokens int64 `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	_ = json.Unmarshal(respBody, &parsed)
+	r.recordUsage(res.provider, res.model, parsed.Usage.TotalTokens)
+	log.Printf("chicco: %s (%s) served embeddings, %d tokens", res.provider, res.model, parsed.Usage.TotalTokens)
+
+	contentType := res.up.contentType
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.WriteHeader(res.up.status)
+	_, _ = w.Write(respBody)
 }
 
 // dispatchResult is a successful upstream response plus the provider/model that
@@ -811,14 +863,22 @@ func dispatchStatus(err error) int {
 // cooldown/health/quota bookkeeping handleChat always has — until one provider
 // answers with a 2xx or every candidate is exhausted/blocked. It mutates
 // payload["model"] in place with each pick before marshaling, so callers must
-// pass an OpenAI chat-completions-shaped payload. Shared by handleChat and
-// handleMessages so failover/cooldown/quota logic lives in exactly one place
-// regardless of which wire format the caller used.
-func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload map[string]any) (*dispatchResult, error) {
+// pass a payload already shaped for upstreamPath (OpenAI chat-completions for
+// "/chat/completions", OpenAI embeddings for "/embeddings"). Shared by
+// handleChat, handleMessages and handleEmbeddings so failover/cooldown/quota
+// logic lives in exactly one place regardless of which wire format the caller used.
+func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload map[string]any, upstreamPath string) (*dispatchResult, error) {
 	// Determine which subset of providers to route to based on the requested model.
 	// "chicco:auto" or an unknown model routes across all active providers.
 	// A known virtual model ID restricts routing to its configured backends.
 	active, strategy := r.activeForModel(requestedModel)
+	// CLI providers return plain chat text, not vectors — routing an embeddings
+	// request to one yields a 2xx body that isn't an embedding. Drop them here so
+	// they can't be picked (see runCLI, which reads "messages" an embeddings
+	// payload doesn't have).
+	if upstreamPath == "/embeddings" {
+		active = slices.DeleteFunc(active, func(p Provider) bool { return p.Kind == "cli" })
+	}
 	if len(active) == 0 {
 		return nil, &dispatchError{http.StatusServiceUnavailable, "chicco: no providers configured with an API key and models"}
 	}
@@ -850,7 +910,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 			}
 			up, err = runCLI(ctx, p, model, payload)
 		} else {
-			up, err = forward(ctx, p, upstreamBody)
+			up, err = forward(ctx, p, upstreamBody, upstreamPath)
 		}
 		if err != nil {
 			r.block(p.Name, defaultCooldown, "error")
@@ -887,12 +947,12 @@ type upstream struct {
 	body        io.ReadCloser
 }
 
-// forward POSTs body to a provider's /chat/completions, carrying its bearer token
-// and propagating the caller's context so a client cancel tears down the upstream
-// request. The client has no timeout: long streamed generations are bounded by
-// the caller's context, not a deadline.
-func forward(ctx context.Context, p Provider, body []byte) (*upstream, error) {
-	url := strings.TrimRight(p.BaseURL, "/") + "/chat/completions"
+// forward POSTs body to a provider's base URL + path (e.g. "/chat/completions",
+// "/embeddings"), carrying its bearer token and propagating the caller's context
+// so a client cancel tears down the upstream request. The client has no timeout:
+// long streamed generations are bounded by the caller's context, not a deadline.
+func forward(ctx context.Context, p Provider, body []byte, path string) (*upstream, error) {
+	url := strings.TrimRight(p.BaseURL, "/") + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
