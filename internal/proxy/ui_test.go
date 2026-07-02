@@ -40,6 +40,40 @@ func TestLogBufferRingAndSplit(t *testing.T) {
 	}
 }
 
+// TestIsErrorLine confirms the log pane's red-highlight heuristic catches
+// chicco's actual failure log lines and leaves routine ones alone.
+func TestIsErrorLine(t *testing.T) {
+	red := []string{
+		"chicco: server error: listen tcp :41986: bind: address already in use",
+		"chicco: groq — auth failed (invalid or missing API key)",
+		"chicco: groq — unreachable at boot",
+		"chicco: reload failed, keeping current config: yaml: line 3: bad indent",
+		"chicco: reload rejected — providers[0]: missing name",
+		"chicco: groq (llama-3.3-70b) transport error, blocked 1m0s: context deadline exceeded",
+		"chicco: groq (llama-3.3-70b) HTTP 429, blocked 1m0s",
+		"chicco test: ✗ groq/llama-3.3-70b — limit — resets in 17h43m · 200.0k tok · daily",
+	}
+	for _, l := range red {
+		if !isErrorLine(l) {
+			t.Errorf("isErrorLine(%q) = false, want true", l)
+		}
+	}
+
+	dim := []string{
+		"chicco 1.2.3 listening on :41986 — rotating across 2 provider(s): [groq cerebras]",
+		"chicco: groq — healthy",
+		"chicco: config reloaded from chicco.yaml (2 provider(s))",
+		"chicco: routing to groq (llama-3.3-70b-versatile)",
+		"chicco: groq (llama-3.3-70b-versatile) served 44 tokens",
+		"chicco test: ✓ groq/llama-3.3-70b — 44 tok · 44/200.0k tok · daily",
+	}
+	for _, l := range dim {
+		if isErrorLine(l) {
+			t.Errorf("isErrorLine(%q) = true, want false", l)
+		}
+	}
+}
+
 func TestRenderBarColorAndFill(t *testing.T) {
 	// Empty bar is all light blocks; full bar is all solid blocks.
 	if strings.Contains(renderBar(0, 10), "█") {

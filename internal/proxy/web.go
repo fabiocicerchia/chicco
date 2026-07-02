@@ -180,6 +180,7 @@ const dashboardHTML = `<!DOCTYPE html>
     height: 100%;
   }
   #log-body .line { white-space: pre; line-height: 1.5; }
+  #log-body .line.err { color: var(--red); }
 
   /* ── legend bar ── */
   #legend {
@@ -396,12 +397,23 @@ function renderProviders(providers) {
 
 let lastLogCount = 0;
 
+// errKeywords mirrors ui.go's isErrorLine: log lines carry no structured
+// level, so a failure is flagged in red by these substrings (checked
+// case-insensitively) rather than by a level field.
+const errKeywords = ['error', 'fail', 'reject', 'unreachable', 'blocked', '✗'];
+function isErrorLine(line) {
+  const l = line.toLowerCase();
+  return errKeywords.some(kw => l.includes(kw));
+}
+
 function renderLogs(lines) {
   const el = document.getElementById('log-body');
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
 
   if (lines.length !== lastLogCount) {
-    el.innerHTML = lines.map(l => '<div class="line">' + esc(l) + '</div>').join('');
+    el.innerHTML = lines.map(l =>
+      '<div class="line' + (isErrorLine(l) ? ' err' : '') + '">' + esc(l) + '</div>'
+    ).join('');
     lastLogCount = lines.length;
     if (atBottom) el.scrollTop = el.scrollHeight;
   }

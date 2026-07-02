@@ -79,6 +79,7 @@ var (
 
 	titleStyle  = lipgloss.NewStyle().Foreground(colTitle).Bold(true)
 	dimStyle    = lipgloss.NewStyle().Foreground(colDim)
+	errLogStyle = lipgloss.NewStyle().Foreground(colRed)
 	boxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colDim).Padding(0, 1)
 	headerStyle = lipgloss.NewStyle().Foreground(colDim).Bold(true)
 	// scrollThumbStyle is deliberately brighter than the border/dimStyle grey
@@ -292,6 +293,25 @@ func legendLine() string {
 		dimStyle.Render("tab focus · ↑↓/pgup/pgdn scroll · t test · q quit")
 }
 
+// errKeywords are the substrings (checked case-insensitively) that mark a log
+// line as a failure worth flagging in red. Log lines carry no structured
+// level, so this is a heuristic over the messages chicco actually logs (see
+// health.go, reload.go, proxy.go, test.go) — "error", "fail" (failed/failure),
+// "reject" (rejected), "unreachable", and "blocked" (a provider put in
+// cooldown) cover every failure path; "✗" catches the `t`-test failure lines.
+var errKeywords = []string{"error", "fail", "reject", "unreachable", "blocked", "✗"}
+
+// isErrorLine reports whether line should render in red instead of dim grey.
+func isErrorLine(line string) bool {
+	l := strings.ToLower(line)
+	for _, kw := range errKeywords {
+		if strings.Contains(l, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 // renderLogs draws the log buffer inside a box of exactly w×h.
 // scroll is how many lines from the bottom have been scrolled past (0 = bottom/latest).
 // focused controls whether the border is highlighted.
@@ -335,10 +355,14 @@ func (m uiModel) renderLogs(w, h int, scroll int, focused bool) string {
 	lines = append(lines, titleStyle.Render("logs"))
 	for i := 0; i < capacity; i++ {
 		raw := strings.Repeat(" ", contentW)
+		style := dimStyle
 		if i < len(window) {
 			raw = padRight(truncate(window[i], contentW), contentW)
+			if isErrorLine(window[i]) {
+				style = errLogStyle
+			}
 		}
-		lines = append(lines, dimStyle.Render(raw)+renderTrack(track[i]))
+		lines = append(lines, style.Render(raw)+renderTrack(track[i]))
 	}
 
 	style := boxStyle.Width(innerW).Height(innerH)
