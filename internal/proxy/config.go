@@ -189,11 +189,23 @@ type Model struct {
 // Backend is one entry in a Model's backend list.
 // Quota overrides the parent provider's quota for this specific model when set.
 // This lets you enforce per-model limits (e.g. Groq's per-model daily caps) that
-// differ from the provider's aggregate quota.
+// differ from the provider's aggregate quota. Weight likewise overrides the
+// provider's "weighted" strategy bias for this specific model, since the same
+// provider may back several virtual models with a different priority in each.
 type Backend struct {
 	Provider string `yaml:"provider"`
 	Model    string `yaml:"model"`
-	Quota    *Quota `yaml:"quota,omitempty"` // nil → inherit provider quota
+	Quota    *Quota `yaml:"quota,omitempty"`  // nil → inherit provider quota
+	Weight   *int   `yaml:"weight,omitempty"` // nil → inherit provider weight
+}
+
+// effectiveWeight returns the weight for this backend: its own override when
+// configured (nil → inherit), otherwise the given provider fallback.
+func (b Backend) effectiveWeight(fallback int) int {
+	if b.Weight != nil {
+		return *b.Weight
+	}
+	return fallback
 }
 
 // effectiveQuota returns the quota for this backend: the backend's own quota
@@ -324,6 +336,11 @@ func (c Config) Validate() []string {
 		if !knownStrategies[m.Strategy] {
 			problems = append(problems, "model "+where+": unknown strategy "+strconv.Quote(m.Strategy)+
 				` (want "order", "round_robin", "random" or "weighted")`)
+		}
+		for _, b := range m.Backends {
+			if b.Weight != nil && *b.Weight < 0 {
+				problems = append(problems, "model "+where+": backend "+b.Provider+": weight must not be negative")
+			}
 		}
 	}
 	if len(c.Providers) == 0 {

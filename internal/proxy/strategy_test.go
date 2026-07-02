@@ -117,3 +117,49 @@ func TestStrategyPerModel(t *testing.T) {
 		t.Errorf("chicco:auto strategy = %q, want order", autoStrategy)
 	}
 }
+
+// TestBackendWeightOverride confirms a backend's weight overrides the provider's
+// own weight for that virtual model only, while a model with no override falls
+// back to the provider's weight.
+func TestBackendWeightOverride(t *testing.T) {
+	nine, one := 9, 1
+	ps := []Provider{
+		{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}, Weight: 1},
+		{Name: "b", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}, Weight: 1},
+	}
+	models := []Model{
+		{ID: "favor-a", Strategy: "weighted", Backends: []Backend{
+			{Provider: "a", Model: "m", Weight: &nine},
+			{Provider: "b", Model: "m", Weight: &one},
+		}},
+		{ID: "no-override", Strategy: "weighted", Backends: []Backend{
+			{Provider: "a", Model: "m"},
+			{Provider: "b", Model: "m"},
+		}},
+	}
+	r := NewRotator(ps, models)
+
+	active, strategy := r.activeForModel("favor-a")
+	aFirst := 0
+	const n = 3000
+	for i := 0; i < n; i++ {
+		if orderNames(r, active, strategy)[0] == "a" {
+			aFirst++
+		}
+	}
+	if aFirst < n*3/4 {
+		t.Errorf("favor-a: a led %d/%d (%.0f%%), want ~90%% (weight override ignored?)", aFirst, n, 100*float64(aFirst)/n)
+	}
+
+	// Providers still carry their own (equal) weight for a model with no override.
+	active2, strategy2 := r.activeForModel("no-override")
+	aFirst2 := 0
+	for i := 0; i < n; i++ {
+		if orderNames(r, active2, strategy2)[0] == "a" {
+			aFirst2++
+		}
+	}
+	if aFirst2 < n*2/5 || aFirst2 > n*3/5 {
+		t.Errorf("no-override: a led %d/%d (%.0f%%), want ~50%% (equal provider weight)", aFirst2, n, 100*float64(aFirst2)/n)
+	}
+}

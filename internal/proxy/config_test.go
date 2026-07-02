@@ -82,3 +82,18 @@ func TestValidateModelStrategy(t *testing.T) {
 		t.Errorf("expected unknown-strategy problem for model bad, got %v", problems)
 	}
 }
+
+// TestValidateBackendWeight flags a negative per-backend weight override.
+func TestValidateBackendWeight(t *testing.T) {
+	negOne := -1
+	cfg := Config{
+		Providers: []Provider{{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}}},
+		Models: []Model{
+			{ID: "bad", Strategy: "weighted", Backends: []Backend{{Provider: "a", Model: "m", Weight: &negOne}}},
+		},
+	}
+	problems := cfg.Validate()
+	if !hasProblem(problems, "model bad: backend a: weight must not be negative") {
+		t.Errorf("expected negative-weight problem, got %v", problems)
+	}
+}

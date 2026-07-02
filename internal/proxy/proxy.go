@@ -269,21 +269,26 @@ func (r *Rotator) activeForModel(requested string) (providers []Provider, strate
 		// response rather than a 503.
 		return all, "order"
 	}
-	// Build a lookup: provider name → list of backend model names for this VM.
+	// Build lookups keyed by provider name: the backend model names for this VM,
+	// and the backend entry itself (for its optional weight override — see
+	// Backend.effectiveWeight).
 	backendModels := make(map[string][]string, len(vm.Backends))
+	backendOf := make(map[string]Backend, len(vm.Backends))
 	for _, b := range vm.Backends {
 		if b.Model != "" {
 			backendModels[b.Provider] = append(backendModels[b.Provider], b.Model)
 		}
+		backendOf[b.Provider] = b
 	}
 	// Keep only active providers that appear in the backend list, replacing their
 	// full Models slice with only the backend-specific models so pick() round-robins
-	// within the right set.
+	// within the right set, and applying this model's weight override, if any.
 	out := make([]Provider, 0, len(vm.Backends))
 	for _, p := range all {
 		if bm, ok := backendModels[p.Name]; ok {
 			pc := p
 			pc.Models = bm
+			pc.Weight = backendOf[p.Name].effectiveWeight(p.Weight)
 			out = append(out, pc)
 		}
 	}

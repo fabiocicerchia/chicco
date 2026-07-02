@@ -149,6 +149,31 @@ providers:
 - A provider with an empty key or no models is inactive and skipped at startup.
 - Order is the preference order. List the providers you have keys for.
 
+### Virtual models (`models:`)
+
+A top-level `models:` list groups backends from one or more providers under a
+single virtual model ID, which callers request by name (or `chicco:auto` to
+route across every active provider instead):
+
+```yaml
+models:
+  - id: llama-3.3-70b
+    backends:
+      - provider: cerebras
+        model: llama-3.3-70b
+      - provider: groq
+        model: llama-3.3-70b-versatile
+        quota:
+          tpd: 100000   # overrides groq's provider-level quota for this model only
+```
+
+Each backend can carry its own `quota:` block, which overrides the provider's
+top-level quota just for that model — useful when a provider caps models
+independently (e.g. Groq's per-model daily limits). A backend can likewise
+carry its own `weight` (see [docs/LOAD_BALANCING.md](docs/LOAD_BALANCING.md)),
+overriding the provider's weight just for that model. Omit either to inherit
+the provider's own. See `chicco.yaml` for a fuller example.
+
 ### Load-balancing strategy (`strategy`)
 
 By default chicco drains a virtual model's backends top-down (config order).

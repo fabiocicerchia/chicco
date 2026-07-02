@@ -113,10 +113,11 @@ models:
   # model here (chicco:auto, or an unknown model name) always uses plain config
   # order across all active providers.
   #
-  # Each backend can also carry its own quota: block, which overrides the
-  # provider-level quota for that specific model. This is useful when a provider
-  # caps each model independently (e.g. Groq's per-model daily token limits differ
-  # from its aggregate cap).
+  # Each backend can also carry its own quota: block and/or weight override,
+  # which override the provider-level ones for that specific model. This is
+  # useful when a provider caps each model independently (e.g. Groq's per-model
+  # daily token limits differ from its aggregate cap), or should be weighted
+  # differently across virtual models.
   #
   # Example — Groq has separate per-model daily limits:
   #   - id: llama-3.3-70b
