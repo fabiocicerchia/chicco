@@ -6,19 +6,20 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/fabiocicerchia/chicco)](https://goreportcard.com/report/github.com/fabiocicerchia/chicco)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A tiny **local OpenAI-compatible rotation proxy**. chicco serves one endpoint and
-forwards each `/v1/chat/completions` request to the next free-tier provider in
-`chicco.yaml`, round-robining models and skipping any provider that hits a quota
-or auth error — so a single stable endpoint fronts a pool of free-tier tokens.
-An Anthropic-compatible `/v1/messages` endpoint sits alongside it, translated
-to and from the same rotation, so Claude Code and other Anthropic-SDK clients
-can point straight at chicco too. An OpenAI-compatible `/v1/embeddings` endpoint
-rotates the same way (across HTTP providers — CLI backends return text, not
-vectors, so they're skipped for embeddings).
+> *In Rome, **chicco** (pronounced "kee-kko") is an affectionate, colloquial way to
+> address someone — roughly like "bro" or "dude".*
 
-Point any OpenAI (or Anthropic) client (agent runner, SDK, `curl`) at
-`http://127.0.0.1:41986/v1` and your requests transparently cascade across free
-models, moving on to the next one as tokens run out.
+A tiny **local, OpenAI- and Anthropic-compatible rotation proxy**. chicco fronts
+a pool of providers behind one stable endpoint: it forwards each request — OpenAI
+chat completions (`/v1/chat/completions`), Anthropic messages (`/v1/messages`),
+or embeddings (`/v1/embeddings`) — to the next provider in `chicco.yaml`,
+round-robining models and skipping any that hits a quota or auth error. A single
+URL cascades across your free-tier tokens and moves on as each one runs out.
+
+Providers can be HTTP APIs **or local CLI tools** (claude, codex, gemini, qwen, …),
+and both OpenAI- and Anthropic-SDK clients — agent runners, `curl`, Claude Code —
+point straight at `http://127.0.0.1:41986/v1` with no code changes. (Embeddings
+rotate across HTTP providers only; CLI backends return text, not vectors.)
 
 It ships with a live **Bubble Tea dashboard**: the top half lists every provider
 with its tokens-used / quota and a red→amber→green usage bar; the bottom half is a
@@ -153,38 +154,28 @@ client ──HTTP──▶ chicco (:41986) ──▶ groq      (llama-3.3-70b-ve
 chicco relies on each provider's own `429` to tell it a free tier is spent; token
 counters are persisted (see below).
 
-## Green usage
+## Sustainable Usage
 
-Pooling several free tiers is chicco's whole point, but it also removes the
-natural stopping point any single tier would otherwise impose — you never see
-"quota exceeded" until *every* configured provider is exhausted, which grows
-every time you add another one. A few things worth knowing if you'd rather
-keep that pooling deliberate:
+Pooling free tiers is the point, but it also removes any single tier's natural
+stop: `429`-driven failover only trips once *every* provider is exhausted, and
+that ceiling rises with each one you add. Levers to keep the pooling deliberate:
 
-- **Model size is the biggest lever, and it's already free.** Per-request
-  compute scales mostly with model size and prompt/response length, far more
-  than with which provider serves it. `models:` (below) already lets you list
-  a virtual model's backends in preference order — put a small/fast model
-  first and a larger one only as fallback.
-- **The dashboard always shows a pooled total** — "today: N req · M tokens
-  across P active" — in both the TUI and `/dashboard`, so the aggregate isn't
-  hidden behind per-provider bars.
-- **An optional top-level `quota:`** caps usage across every provider
-  *combined* (see below) — a self-imposed ceiling on the pooling, not just a
-  view of it.
-- **Carbon-aware routing isn't offered, on purpose.** No OpenAI-compatible API
-  (HTTP or CLI-backed) discloses datacenter region, PUE, or grid carbon
-  intensity per request, and providers route internally and dynamically — there's
-  no real signal for chicco to route on. The closest honest substitute is
-  manual: rank providers in `chicco.yaml` using whatever public sustainability
-  disclosures you trust, the same "config order is preference order" mechanism
-  used for the free-tier-first pattern.
-- **Request coalescing (de-duplicating identical concurrent calls) was
-  considered and skipped.** chicco streams each response live to one caller;
-  coalescing means broadcasting it to several, and non-zero-temperature
-  requests are supposed to return an independent sample each call — collapsing
-  two callers onto one response would silently break that. Revisit only if a
-  shared multi-caller instance shows real duplicate traffic.
+- **Model size dominates energy per request**, far more than provider choice —
+  inference cost scales with active parameters × (prompt + completion) tokens.
+  Order a virtual model's `backends:` smallest-first so the cheapest model
+  serves by default and larger ones are fallback only (config order = routing
+  order; see [Virtual models](#virtual-models-models)).
+- **Cap the pool, don't just watch it.** A top-level `quota:` (`tpd`/`rpd`/…)
+  enforces a hard aggregate ceiling across all providers; the TUI and
+  `/dashboard` header always show pooled `today: N req · M tokens across P
+  active` whether or not a cap is set.
+- **No carbon-aware routing** — no OpenAI/Anthropic API (HTTP or CLI) exposes
+  region, PUE, or marginal grid intensity per request, and providers route
+  internally, so there's no signal to optimize on. The honest substitute is
+  manual: rank providers in `chicco.yaml` by whatever disclosures you trust.
+- **No request coalescing** — chicco streams each response to a single caller;
+  fanning one completion out to several would break the independent-sample
+  guarantee of `temperature > 0`.
 
 ## Configuration — `chicco.yaml`
 
@@ -340,8 +331,9 @@ needs a restart. SIGHUP is a no-op on Windows.
 
 ## Pointing an agent at chicco
 
-chicco is a plain OpenAI-compatible endpoint, so any client that lets you set a
-base URL works — point it at `http://127.0.0.1:41986/v1` (no API key needed).
+chicco is a plain OpenAI- and Anthropic-compatible endpoint, so any client that
+lets you set a base URL works — point it at `http://127.0.0.1:41986/v1` (no API
+key needed).
 The [`examples/`](examples/) folder has ready configs for **OpenCode**,
 **Continue**, **Aider**, **Headroom** (context compression in front of chicco),
 and the raw OpenAI SDK / `curl`.
