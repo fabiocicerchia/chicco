@@ -21,6 +21,12 @@ func TestCooldown(t *testing.T) {
 		{http.StatusTooManyRequests, 30 * time.Second, 30 * time.Second},
 		{http.StatusTooManyRequests, 0, defaultCooldown},
 		{http.StatusInternalServerError, 0, defaultCooldown},
+		// Request-shaped 4xx get only a brief skip, even if a bogus Retry-After
+		// rides along, so a healthy provider isn't locked out of future requests.
+		{http.StatusBadRequest, 0, requestErrorCooldown},
+		{http.StatusNotFound, 0, requestErrorCooldown},
+		{http.StatusRequestEntityTooLarge, 30 * time.Second, requestErrorCooldown},
+		{http.StatusUnprocessableEntity, 0, requestErrorCooldown},
 	}
 	for _, c := range cases {
 		if got := cooldown(c.status, c.retryAfter); got != c.want {

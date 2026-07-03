@@ -25,6 +25,14 @@ const (
 	// (401/403) won't fix itself in seconds.
 	defaultCooldown = time.Minute
 	authCooldown    = time.Hour
+	// requestErrorCooldown is used for request-shaped 4xx (400/404/413/422): the
+	// payload, not the provider, was rejected, so a healthy provider must not be
+	// locked out for future (differently-sized) requests. It's just long enough to
+	// exclude the provider from the *current* request's failover loop.
+	// ponytail: 5s covers a normal fast-failing loop; a provider that takes >5s to
+	// 4xx could be re-tried once within the same request — harmless, the loop is
+	// bounded by the provider count.
+	requestErrorCooldown = 5 * time.Second
 )
 
 // Health is a provider's liveness as seen by the boot probe / live requests.
@@ -539,11 +547,28 @@ func blockReason(status int) string {
 	}
 }
 
+// isRequestError reports whether a status means the request itself was rejected
+// (bad body, unknown model, payload too large) rather than the provider being
+// unhealthy or rate-limited. Waiting won't help these, and they say nothing about
+// whether the next request would succeed — so they get only a brief cooldown.
+func isRequestError(status int) bool {
+	switch status {
+	case http.StatusBadRequest, http.StatusNotFound,
+		http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
+		return true
+	}
+	return false
+}
+
 // cooldown picks how long to skip a provider after a failure: a rejected key for
-// an hour, an explicit Retry-After when given, otherwise a short default.
+// an hour, a brief skip for a request-shaped 4xx (the payload was at fault, not
+// the provider), an explicit Retry-After when given, otherwise a short default.
 func cooldown(status int, retryAfter time.Duration) time.Duration {
 	if isAuth(status) {
 		return authCooldown
+	}
+	if isRequestError(status) {
+		return requestErrorCooldown
 	}
 	if retryAfter > 0 {
 		return retryAfter
