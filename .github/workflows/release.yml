@@ -4,13 +4,16 @@ on:
   push:
     tags: ["v*"]
 
+# Read-only by default; each job elevates only the scopes it needs.
 permissions:
-  contents: write   # create the GitHub Release and upload assets
-  id-token: write   # OIDC token for keyless cosign signing
+  contents: read
 
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the GitHub Release and upload assets
+      id-token: write   # OIDC token for keyless cosign signing
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
