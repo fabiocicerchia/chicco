@@ -5,7 +5,7 @@
 # equivalent). --platform=$BUILDPLATFORM + GOOS/GOARCH cross-compiles Go
 # natively on the runner's own arch for a multi-platform buildx build, instead
 # of emulating the whole compile under QEMU for the non-native target.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine@sha256:523c3effe300580ed375e43f43b1c9b091b68e935a7c3a92bfcc4e7ed55b18c2 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
 # Runtime stage — no source, no build tools, no baked-in config (chicco.yaml
 # holds provider keys, so it's mounted at run time — see examples/README.md
 # and docs/DOCKER.md).
-FROM alpine:3.20
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 RUN apk add --no-cache ca-certificates && \
     addgroup -S chicco && adduser -S chicco -G chicco && \
     mkdir -p /var/lib/chicco && chown chicco:chicco /var/lib/chicco
