@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
 # Runtime stage — no source, no build tools, no baked-in config (chicco.yaml
 # holds provider keys, so it's mounted at run time — see examples/README.md
 # and docs/DOCKER.md).
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 RUN apk add --no-cache ca-certificates && \
     addgroup -S chicco && adduser -S chicco -G chicco && \
     mkdir -p /var/lib/chicco && chown chicco:chicco /var/lib/chicco
