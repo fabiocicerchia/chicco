@@ -100,6 +100,42 @@ func TestRunCLIEndToEnd(t *testing.T) {
 	}
 }
 
+// TestRunCLIViaAnthropicEndpointGetsThePrompt pins the bug that made every CLI
+// provider unusable through /v1/messages: anthropicToOpenAI built messages as
+// []map[string]any while splitMessages asserts .([]any), so the assertion failed
+// silently and the tool ran with an EMPTY prompt. The fake CLI echoes its own
+// argv, so an empty prompt is visible in the reply.
+func TestRunCLIViaAnthropicEndpointGetsThePrompt(t *testing.T) {
+	rot := NewRotator([]Provider{{
+		Name:    "echo-cli",
+		Kind:    "cli",
+		Command: "sh",
+		Args:    []string{"-c", `printf 'PROMPT<%s>' "$1"`, "sh", "{{prompt}}"},
+		Models:  []string{"m1"},
+	}}, nil)
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+		strings.NewReader(`{"model":"m1","max_tokens":16,"system":"be terse","messages":[{"role":"user","content":"ping"}]}`))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	if strings.Contains(string(body), "PROMPT<>") {
+		t.Fatalf("CLI provider ran with an EMPTY prompt via /v1/messages: %s", body)
+	}
+	for _, want := range []string{"ping", "be terse"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("prompt did not reach the CLI (missing %q): %s", want, body)
+		}
+	}
+}
+
 // TestRunCLIFailureFailsOver confirms a non-zero exit cools the CLI provider down
 // and the request rotates to the next (working) provider.
 func TestRunCLIFailureFailsOver(t *testing.T) {

@@ -122,7 +122,12 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 		return nil, "", false, errors.New("messages is required")
 	}
 
-	messages := []map[string]any{}
+	// []any, NOT []map[string]any: this payload is consumed by the same code that
+	// handles /v1/chat/completions, where it arrives from json.Unmarshal and so is
+	// always []any. splitMessages (cli.go) type-asserts .([]any) — a
+	// []map[string]any fails that assertion silently, yielding an EMPTY prompt, so
+	// every CLI provider reached through /v1/messages ran with no input at all.
+	messages := []any{}
 	if sys := anthropicBlockText(req.System); sys != "" {
 		messages = append(messages, map[string]any{"role": "system", "content": sys})
 	}
@@ -131,7 +136,9 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 		if err != nil {
 			return nil, "", false, err
 		}
-		messages = append(messages, converted...)
+		for _, c := range converted {
+			messages = append(messages, c)
+		}
 	}
 
 	payload = map[string]any{
@@ -149,7 +156,10 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 		payload["stop"] = req.StopSequences
 	}
 	if len(req.Tools) > 0 {
-		tools := make([]map[string]any, len(req.Tools))
+		// []any for the same reason as messages above — dispatch() checks
+		// payload["tools"].([]any) to warn that a CLI provider ignores
+		// function-calling, and a []map[string]any silently skips that warning.
+		tools := make([]any, len(req.Tools))
 		for i, t := range req.Tools {
 			tools[i] = map[string]any{
 				"type": "function",

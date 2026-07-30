@@ -221,7 +221,17 @@ func TestAnthropicToOpenAI(t *testing.T) {
 	if model != "claude-x" || stream {
 		t.Errorf("model/stream = %q/%v, want claude-x/false", model, stream)
 	}
-	messages, _ := payload["messages"].([]map[string]any)
+	// Must be []any — the shape json.Unmarshal produces on the
+	// /v1/chat/completions path. splitMessages type-asserts exactly that, so a
+	// []map[string]any here silently gave every CLI provider an empty prompt.
+	raw, ok := payload["messages"].([]any)
+	if !ok {
+		t.Fatalf("messages is %T, want []any (CLI providers assert []any and get an empty prompt otherwise)", payload["messages"])
+	}
+	messages := make([]map[string]any, len(raw))
+	for i, m := range raw {
+		messages[i], _ = m.(map[string]any)
+	}
 	if len(messages) != 4 {
 		t.Fatalf("messages = %+v, want 4 (system, user, assistant-with-tool_calls, tool)", messages)
 	}
