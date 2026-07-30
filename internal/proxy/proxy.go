@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -409,9 +411,14 @@ func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bo
 
 		// Advance the model cursor first so we know which model we'd use, then
 		// run both the provider-level and (if configured) per-model quota checks.
+		// The cursor is committed here, BEFORE the checks below, so a model skipped
+		// by one of them isn't re-chosen by the next pick() in the same failover
+		// loop — otherwise one blocked model made the whole provider unreachable
+		// for the rest of the request.
 		i := (r.modelIdx[p.Name] + 1) % len(p.Models)
 		model := p.Models[i]
 		mk := p.Name + "/" + model
+		r.modelIdx[p.Name] = i
 
 		// Provider-level rate-limit check.
 		if el, ok := r.eventLogs[p.Name]; ok {
@@ -421,6 +428,14 @@ func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bo
 				r.dirty = true
 				continue
 			}
+		}
+
+		// Model-scoped block: a per-model quota that tripped on an earlier pick, or
+		// an upstream that rejected this specific model (see classifyUpstream).
+		// Checked unconditionally — this used to be the else-branch of the per-model
+		// quota test below, so any backend declaring a quota silently ignored it.
+		if until, ok := r.blocked[mk]; ok && now.Before(until) {
+			continue
 		}
 
 		// Per-model rate-limit check (only when this backend has its own quota).
@@ -435,12 +450,8 @@ func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bo
 					continue
 				}
 			}
-		} else if until, modelBlocked := r.blocked[mk]; modelBlocked && now.Before(until) {
-			// Model was previously blocked by a per-model limit — skip it.
-			continue
 		}
 
-		r.modelIdx[p.Name] = i
 		return p, model, true
 	}
 	return Provider{}, "", false
@@ -574,6 +585,54 @@ func cooldown(status int, retryAfter time.Duration) time.Duration {
 		return retryAfter
 	}
 	return defaultCooldown
+}
+
+// quotaBodyRe / modelBodyRe read an upstream's error TEXT, because the status
+// alone is ambiguous: 403 is used for a rejected key, for "free quota
+// exhausted" (Alibaba) and for "model is not available on this plan"
+// (Cloudflare). Treating all three as an auth failure cooled the whole provider
+// for an hour and greyed it as "invalid key", which took every OTHER model on
+// that provider down with it — one wrong model id in the config was enough to
+// lose five working ones.
+var (
+	quotaBodyRe = regexp.MustCompile(`(?i)(quota|credit|billing|insufficient|exhaust|payment|spend|top ?up|upgrade)`)
+	// `.` not `[^.]`: model ids contain dots (@cf/moonshotai/kimi-k2.7-code), which
+	// is exactly the id that slipped through and cost the provider an hour.
+	modelBodyRe = regexp.MustCompile(`(?i)model.{0,100}?(not available|not found|does not exist|unsupported|invalid|no access|not supported)` +
+		`|(?i)(invalid|unknown|unsupported).{0,20}model`)
+)
+
+// upstreamClass is how one non-2xx upstream reply should be handled: how long to
+// skip, what to call it on the dashboard, and whether the skip applies to the
+// whole provider or only the model that was asked for.
+type upstreamClass struct {
+	reason      string // "auth" | "limit" | "error"
+	cooldown    time.Duration
+	modelScoped bool // block "provider/model", leaving sibling models routable
+}
+
+// classifyUpstream decides that, from the status, the Retry-After header and the
+// error body. Body text is only ever used to make a verdict LESS severe than the
+// status alone would imply, so a provider that says nothing useful behaves
+// exactly as before.
+func classifyUpstream(status int, body string, retryAfter time.Duration) upstreamClass {
+	// Quota wording is checked FIRST and stays provider-wide: an exhausted account
+	// affects every model on it, and such messages often mention "model" too
+	// ("...to keep using the model, upgrade"), which must not scope it to one model.
+	switch {
+	case status == http.StatusPaymentRequired: // 402 — out of credits
+		return upstreamClass{"limit", cmp.Or(retryAfter, authCooldown), false}
+	case status == http.StatusForbidden && quotaBodyRe.MatchString(body):
+		// "free quota has been exhausted" — a real limit, not a bad key. Labelled
+		// honestly so the dashboard stops claiming the API key is invalid.
+		return upstreamClass{"limit", cmp.Or(retryAfter, authCooldown), false}
+	}
+	// A complaint about the named model is about the request, not the provider:
+	// skip just this model, briefly, and leave its siblings routable.
+	if modelBodyRe.MatchString(body) && (isAuth(status) || isRequestError(status)) {
+		return upstreamClass{"error", requestErrorCooldown, true}
+	}
+	return upstreamClass{blockReason(status), cooldown(status, retryAfter), false}
 }
 
 // parseRetryAfter reads a Retry-After header (delta-seconds form) into a
@@ -946,13 +1005,18 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		if up.status < 200 || up.status >= 300 {
 			snippet, _ := io.ReadAll(io.LimitReader(up.body, 512))
 			up.body.Close()
-			d := cooldown(up.status, up.retryAfter)
-			r.block(p.Name, d, blockReason(up.status))
-			if isAuth(up.status) {
+			text := strings.TrimSpace(string(snippet))
+			cls := classifyUpstream(up.status, text, up.retryAfter)
+			key := p.Name
+			if cls.modelScoped {
+				key = p.Name + "/" + model // sibling models stay routable
+			}
+			r.block(key, cls.cooldown, cls.reason)
+			if cls.reason == "auth" {
 				r.setHealth(p.Name, HealthAuth) // bad key — grey it in the dashboard
 			}
-			lastErr = fmt.Sprintf("%s: HTTP %d: %s", p.Name, up.status, strings.TrimSpace(string(snippet)))
-			log.Printf("chicco: %s (%s) HTTP %d, blocked %s", p.Name, model, up.status, d)
+			lastErr = fmt.Sprintf("%s: HTTP %d: %s", p.Name, up.status, text)
+			log.Printf("chicco: %s (%s) HTTP %d, blocked %s %s (%s)", p.Name, model, up.status, key, cls.cooldown, cls.reason)
 			continue
 		}
 		log.Printf("chicco: routing to %s (%s)", p.Name, model)

@@ -282,3 +282,89 @@ func TestGlobalQuotaCapsAcrossProviders(t *testing.T) {
 		t.Errorf("request 3 status = %d, want 503 (global RPD:2 cap tripped)", got)
 	}
 }
+
+// TestClassifyUpstream pins the mapping that caused the worst observed failure
+// mode: a 403 meaning "this model isn't on your plan" or "free quota exhausted"
+// was treated as a rejected API key, cooling the whole provider for an hour and
+// greying it as auth-failed. One wrong model id in the config took five working
+// models offline with it.
+func TestClassifyUpstream(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		status     int
+		body       string
+		wantReason string
+		wantScoped bool
+		wantAtMost time.Duration // 0 = don't care
+	}{
+		{"real bad key", 401, `{"error":{"message":"Invalid API key"}}`, "auth", false, 0},
+		{"bare 403", 403, `{"error":{"message":"Forbidden"}}`, "auth", false, 0},
+		{"cloudflare model not on plan", 403,
+			`{"errors":[{"message":"AiError: Model @cf/moonshotai/kimi-k2.7-code is not available on the Workers AI plan"}]}`,
+			"error", true, requestErrorCooldown},
+		{"alibaba free quota gone", 403,
+			`{"error":{"message":"The free quota has been exhausted. To continue accessing the model on a paid basis..."}}`,
+			"limit", false, 0},
+		{"openrouter out of credits", 402,
+			`{"error":{"message":"This request requires more credits, or fewer max_tokens."}}`,
+			"limit", false, 0},
+		{"groq unknown model", 404,
+			`{"error":{"message":"The model ` + "`qwen3-32b`" + ` does not exist or you do not have access to it."}}`,
+			"error", true, requestErrorCooldown},
+		{"mistral invalid model", 400,
+			`{"object":"error","message":"Invalid model: pixtral-large-latest","type":"invalid_model"}`,
+			"error", true, requestErrorCooldown},
+		{"plain rate limit", 429, `{"error":{"message":"rate limit reached"}}`, "limit", false, 0},
+		{"server error", 502, `bad gateway`, "error", false, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := classifyUpstream(c.status, c.body, 0)
+			if got.reason != c.wantReason {
+				t.Errorf("reason = %q, want %q", got.reason, c.wantReason)
+			}
+			if got.modelScoped != c.wantScoped {
+				t.Errorf("modelScoped = %v, want %v (scoped keeps sibling models routable)", got.modelScoped, c.wantScoped)
+			}
+			if c.wantAtMost > 0 && got.cooldown > c.wantAtMost {
+				t.Errorf("cooldown = %v, want <= %v", got.cooldown, c.wantAtMost)
+			}
+			if !c.wantScoped && c.wantReason != "auth" && got.cooldown == authCooldown && c.status == 403 {
+				// a quota 403 may legitimately last an hour, but it must not be
+				// labelled "auth" — that is what made the dashboard lie.
+				if got.reason == "auth" {
+					t.Errorf("403 quota reply still labelled auth")
+				}
+			}
+		})
+	}
+}
+
+// TestModelScopedBlockKeepsSiblingsRoutable is the behavioural half: a provider
+// whose FIRST model is rejected by name must still serve its other models.
+func TestModelScopedBlockKeepsSiblingsRoutable(t *testing.T) {
+	rot := NewRotator([]Provider{{
+		Name: "p", BaseURL: "http://unused", APIKey: "k",
+		Models: []string{"bad-model", "good-model"},
+	}}, nil)
+
+	// Simulate what dispatch does for a "model not available" 403 on bad-model.
+	cls := classifyUpstream(403, `Model bad-model is not available on this plan`, 0)
+	if !cls.modelScoped {
+		t.Fatal("precondition: expected a model-scoped verdict")
+	}
+	rot.block("p/bad-model", cls.cooldown, cls.reason)
+
+	active := rot.Active()
+	seen := map[string]bool{}
+	for i := 0; i < 4; i++ {
+		if _, model, ok := rot.pick(active, "order"); ok {
+			seen[model] = true
+		}
+	}
+	if seen["bad-model"] {
+		t.Error("pick returned the blocked model")
+	}
+	if !seen["good-model"] {
+		t.Error("sibling model was unreachable — the block leaked to the whole provider")
+	}
+}
