@@ -77,8 +77,18 @@ func Run(opts Options) error {
 		go func() {
 			t := time.NewTicker(10 * time.Second)
 			defer t.Stop()
+			// Report a failing write ONCE. Discarding this error hid an unwritable
+			// state directory for as long as it existed: usage counters and
+			// rate-limit windows silently reset on every restart, which lets a
+			// daily quota be re-spent by restarting. Once, not every tick, so a
+			// permanent failure can't flood the log or the dashboard pane.
+			var warned bool
 			for range t.C {
-				_ = rot.Persist()
+				if err := rot.Persist(); err != nil && !warned {
+					warned = true
+					log.Printf("chicco: WARNING: cannot write state to %s (%v) — usage counters "+
+						"and rate-limit windows will reset on restart", opts.StatePath, err)
+				}
 			}
 		}()
 	}
