@@ -1024,7 +1024,44 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		return &dispatchResult{up: up, provider: p.Name, model: model}, nil
 	}
 
+	if lastErr == "" {
+		// Nothing was even attempted: every candidate was already in cooldown when
+		// the request arrived. Saying only "all providers exhausted: " gave no way
+		// to tell an exhausted quota from a bad key or a wrong model id, which is
+		// exactly the case where the caller most needs to know.
+		lastErr = "nothing attempted — " + r.blockedSummary(active)
+	}
 	return nil, &dispatchError{http.StatusServiceUnavailable, "chicco: all providers exhausted: " + lastErr}
+}
+
+// blockedSummary describes why each candidate was skipped, for the 503 body.
+func (r *Rotator) blockedSummary(active []Provider) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	if until, ok := r.blocked[globalKey]; ok && now.Before(until) {
+		return fmt.Sprintf("the global quota: is exhausted, resets in %s", until.Sub(now).Round(time.Second))
+	}
+	parts := make([]string, 0, len(active))
+	for _, p := range active {
+		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
+			parts = append(parts, fmt.Sprintf("%s: %s, %s left",
+				p.Name, cmp.Or(r.reason[p.Name], "blocked"), until.Sub(now).Round(time.Second)))
+			continue
+		}
+		// Not the provider — the model this virtual model maps to on it.
+		for _, m := range p.Models {
+			mk := p.Name + "/" + m
+			if until, ok := r.blocked[mk]; ok && now.Before(until) {
+				parts = append(parts, fmt.Sprintf("%s: %s, %s left",
+					mk, cmp.Or(r.reason[mk], "blocked"), until.Sub(now).Round(time.Second)))
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return "no candidate was available"
+	}
+	return strings.Join(parts, "; ")
 }
 
 // upstream is one provider's reply, abstracted over HTTP and CLI so handleChat and
