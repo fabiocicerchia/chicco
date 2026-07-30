@@ -7,18 +7,43 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 )
 
 // healthClient bounds each boot probe so a slow or hung provider can't stall
-// startup.
-var healthClient = &http.Client{Timeout: 5 * time.Second}
+// startup. 15s, not 5s: the first probe after boot pays for a COLD DNS cache, and
+// 5s was short enough that a first lookup which merely took its time was recorded
+// as "unreachable". A probe that is only there to colour a dot must not report a
+// provider dead because it was impatient.
+var healthClient = &http.Client{Timeout: 15 * time.Second}
 
 // healthRetryDelay is how long a HealthDown probe waits before its single retry,
 // so a network that isn't up yet at boot doesn't leave every provider grey.
 var healthRetryDelay = 3 * time.Second
+
+// probeSlots bounds how many provider probes run at once.
+//
+// The measured failure was NOT cpu: with the error text finally logged, a cold-cache
+// boot reported six providers unreachable with two causes, and neither was load —
+//
+//	dial tcp [2606:4700:7::2c3]:443: connect: network is unreachable
+//	lookup openrouter.ai on 127.0.0.53:53: read udp ...: i/o timeout
+//
+// — an AAAA record on a host with no IPv6 route, and systemd-resolved's stub
+// dropping UDP queries when eleven arrive at once. Only the first run of five
+// failed; the rest hit a warm cache, which is why the "down" set looked random.
+//
+// Bounding concurrency is still the right lever, because what overwhelms the stub
+// resolver is the number of simultaneous lookups. Sized from the CPU count as a
+// proportional-to-the-machine heuristic rather than a magic constant, floored at 2
+// so a single-core box still overlaps two probes, and capped at 6 because the
+// constraint being respected is a local resolver, not the CPU.
+func probeSlots() int {
+	return min(max(runtime.NumCPU()/2, 2), 6)
+}
 
 // CheckHealth probes every active provider's /v1/models endpoint with its key and
 // records the result, so the dashboard can grey out a provider whose token is
@@ -26,15 +51,30 @@ var healthRetryDelay = 3 * time.Second
 // (a models listing is free) and updates each provider's dot as its probe returns.
 func (r *Rotator) CheckHealth(ctx context.Context) {
 	var wg sync.WaitGroup
+	// Buffered channel as a counting semaphore. Applies to every probe: HTTP ones
+	// because concurrent DNS lookups are what the stub resolver chokes on, CLI ones
+	// because each forks a Node process.
+	slots := make(chan struct{}, probeSlots())
+	// probe runs one attempt while holding a slot. The slot is released before the
+	// retry delay below, so a waiting provider isn't blocked by another's backoff.
+	probe := func(p Provider) (Health, error) {
+		select {
+		case slots <- struct{}{}:
+			defer func() { <-slots }()
+		case <-ctx.Done():
+			return HealthUnknown, ctx.Err()
+		}
+		return probeProvider(ctx, p)
+	}
 	for _, p := range r.Active() {
 		wg.Add(1)
 		go func(p Provider) {
 			defer wg.Done()
-			h, err := probeProvider(ctx, p)
+			h, err := probe(p)
 			if h == HealthDown { // network may not be up yet at boot — retry once
 				select {
 				case <-time.After(healthRetryDelay):
-					h, err = probeProvider(ctx, p)
+					h, err = probe(p)
 				case <-ctx.Done():
 				}
 			}
