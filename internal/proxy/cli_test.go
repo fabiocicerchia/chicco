@@ -68,35 +68,58 @@ func TestSynthSSEParsesAsOpenAI(t *testing.T) {
 }
 
 // TestRunCLIEndToEnd drives a CLI provider through the full handler using a real
-// subprocess (sh) that echoes a fixed answer, and asserts chicco proxies it back
-// as OpenAI SSE.
+// subprocess (sh) that echoes a fixed answer, and asserts chicco answers in the
+// shape the caller asked for: a chat.completion object by default, SSE only when
+// the request set "stream": true. Synthesizing SSE unconditionally handed a
+// non-streaming client text/event-stream, which no OpenAI client parses.
 func TestRunCLIEndToEnd(t *testing.T) {
-	rot := NewRotator([]Provider{{
-		Name:    "fake-cli",
-		Kind:    "cli",
-		Command: "sh",
-		Args:    []string{"-c", "printf 'hello from {{model}}'"},
-		Models:  []string{"m1"},
-	}}, nil)
-	srv := httptest.NewServer(Handler(rot, nil))
-	defer srv.Close()
+	newRot := func() *Rotator {
+		return NewRotator([]Provider{{
+			Name:    "fake-cli",
+			Kind:    "cli",
+			Command: "sh",
+			Args:    []string{"-c", "printf 'hello from {{model}}'"},
+			Models:  []string{"m1"},
+		}}, nil)
+	}
 
-	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",
-		strings.NewReader(`{"model":"x","messages":[{"role":"user","content":"hi"}]}`))
-	if err != nil {
-		t.Fatalf("POST: %v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), `hello from m1`) {
-		t.Errorf("CLI output not proxied: %q", body)
-	}
-	if !strings.Contains(string(body), "[DONE]") {
-		t.Errorf("missing [DONE]: %q", body)
-	}
-	// A served request is recorded with an estimated token count.
-	if s := rot.Snapshot(); s[0].Requests != 1 || s[0].UsedTokens == 0 {
-		t.Errorf("usage not recorded: %+v", s[0])
+	for _, c := range []struct {
+		name, body, wantCT string
+		wantSSE            bool
+	}{
+		{"stream omitted", `{"model":"x","messages":[{"role":"user","content":"hi"}]}`, "application/json", false},
+		{"stream false", `{"model":"x","stream":false,"messages":[{"role":"user","content":"hi"}]}`, "application/json", false},
+		{"stream true", `{"model":"x","stream":true,"messages":[{"role":"user","content":"hi"}]}`, "text/event-stream", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			rot := newRot()
+			srv := httptest.NewServer(Handler(rot, nil))
+			defer srv.Close()
+
+			resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", strings.NewReader(c.body))
+			if err != nil {
+				t.Fatalf("POST: %v", err)
+			}
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+
+			if ct := resp.Header.Get("Content-Type"); ct != c.wantCT {
+				t.Errorf("Content-Type = %q, want %q", ct, c.wantCT)
+			}
+			if !strings.Contains(string(body), `hello from m1`) {
+				t.Errorf("CLI output not proxied: %q", body)
+			}
+			if got := strings.Contains(string(body), "[DONE]"); got != c.wantSSE {
+				t.Errorf("SSE framing = %v, want %v: %q", got, c.wantSSE, body)
+			}
+			if !c.wantSSE && !strings.Contains(string(body), `"object":"chat.completion"`) {
+				t.Errorf("non-streaming reply is not a chat.completion object: %q", body)
+			}
+			// A served request is recorded with an estimated token count.
+			if s := rot.Snapshot(); s[0].Requests != 1 || s[0].UsedTokens == 0 {
+				t.Errorf("usage not recorded: %+v", s[0])
+			}
+		})
 	}
 }
 

@@ -220,6 +220,18 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 		tokens = int64(len(text) / 4) // ponytail: rough estimate when the CLI reports none
 	}
 
+	// Answer in the shape the caller asked for. Synthesizing SSE unconditionally
+	// handed a `"stream": false` client `Content-Type: text/event-stream` and
+	// `data:` frames, which no OpenAI client parses. handleMessages always sets
+	// stream=true before dispatch, so the Anthropic path is unaffected.
+	if s, _ := payload["stream"].(bool); !s {
+		return &upstream{
+			status:      http.StatusOK,
+			contentType: "application/json",
+			body:        io.NopCloser(bytes.NewReader(synthJSON(model, text, tokens))),
+		}, nil
+	}
+
 	return &upstream{
 		status:      http.StatusOK,
 		contentType: "text/event-stream",
@@ -324,12 +336,37 @@ func asInt64(v any) int64 {
 	}
 }
 
+// synthJSON renders a completion as a non-streamed OpenAI chat.completion object,
+// for callers that sent "stream": false. Carries the fields strict clients
+// require (id/object/created/model/finish_reason) rather than the bare choices
+// array the SSE path gets away with.
+func synthJSON(model, text string, tokens int64) []byte {
+	out, _ := json.Marshal(map[string]any{
+		"id":      "chatcmpl-chicco-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   model,
+		"choices": []any{map[string]any{
+			"index":         0,
+			"message":       map[string]any{"role": "assistant", "content": text},
+			"finish_reason": "stop",
+		}},
+		"usage": map[string]any{"total_tokens": tokens},
+	})
+	return out
+}
+
 // synthSSE renders a completion as the minimal OpenAI SSE stream a client accepts:
 // one content delta, an optional usage chunk (for the dashboard bar), and [DONE].
 func synthSSE(text string, tokens int64) []byte {
 	var b bytes.Buffer
 	chunk, _ := json.Marshal(map[string]any{
-		"choices": []any{map[string]any{"delta": map[string]any{"content": text}}},
+		"object": "chat.completion.chunk",
+		"choices": []any{map[string]any{
+			"index":         0,
+			"delta":         map[string]any{"role": "assistant", "content": text},
+			"finish_reason": "stop",
+		}},
 	})
 	b.WriteString("data: ")
 	b.Write(chunk)
