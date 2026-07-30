@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -29,11 +30,11 @@ func (r *Rotator) CheckHealth(ctx context.Context) {
 		wg.Add(1)
 		go func(p Provider) {
 			defer wg.Done()
-			h := probeProvider(ctx, p)
+			h, err := probeProvider(ctx, p)
 			if h == HealthDown { // network may not be up yet at boot — retry once
 				select {
 				case <-time.After(healthRetryDelay):
-					h = probeProvider(ctx, p)
+					h, err = probeProvider(ctx, p)
 				case <-ctx.Done():
 				}
 			}
@@ -42,7 +43,11 @@ func (r *Rotator) CheckHealth(ctx context.Context) {
 			case HealthAuth:
 				log.Printf("chicco: %s — auth failed (invalid or missing API key)", p.Name)
 			case HealthDown:
-				log.Printf("chicco: %s — unreachable at boot", p.Name)
+				// Report WHY. "unreachable at boot" on its own is unfalsifiable: it
+				// cannot be told apart from a timeout under load, a DNS failure or a
+				// genuinely dead endpoint — and this probe is wrong often enough that
+				// the difference is the whole story.
+				log.Printf("chicco: %s — unreachable at boot: %v", p.Name, err)
 			default:
 				log.Printf("chicco: %s — healthy", p.Name)
 			}
@@ -67,33 +72,34 @@ func (r *Rotator) ReprobeLoop(ctx context.Context, every time.Duration) {
 	}
 }
 
-// probeProvider reports a provider's liveness. CLI providers are probed by their
-// health_command / credential file (see probeCLI). For HTTP providers it does a GET
-// on /models with the bearer token: a 401/403 means the key is bad/missing
-// (HealthAuth); any other reply means reachable and not rejected (HealthOK,
-// covering providers that answer 404); a transport error or 5xx is down (HealthDown).
-func probeProvider(ctx context.Context, p Provider) Health {
+// probeProvider reports a provider's liveness, and why when it is HealthDown. CLI
+// providers are probed by their health_command / credential file (see probeCLI).
+// For HTTP providers it does a GET on /models with the bearer token: a 401/403
+// means the key is bad/missing (HealthAuth); any other reply means reachable and
+// not rejected (HealthOK, covering providers that answer 404); a transport error or
+// 5xx is down (HealthDown).
+func probeProvider(ctx context.Context, p Provider) (Health, error) {
 	if p.Kind == "cli" {
 		return probeCLI(ctx, p)
 	}
 	url := strings.TrimRight(p.BaseURL, "/") + "/models"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return HealthDown
+		return HealthDown, err
 	}
 	req.Header.Set("Authorization", "Bearer "+p.APIKey)
 	resp, err := healthClient.Do(req)
 	if err != nil {
-		return HealthDown
+		return HealthDown, err
 	}
 	defer resp.Body.Close()
 	switch {
 	case isAuth(resp.StatusCode):
-		return HealthAuth
+		return HealthAuth, nil
 	case resp.StatusCode >= 500:
-		return HealthDown
+		return HealthDown, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	default:
-		return HealthOK
+		return HealthOK, nil
 	}
 }
 
@@ -101,7 +107,7 @@ func probeProvider(ctx context.Context, p Provider) Health {
 // (a local auth-status check), requiring HealthExpect in the output when set —
 // this is how a logged-out tool greys (HealthAuth). With no health_command, stat
 // the credential file (missing = needs login); otherwise assume healthy.
-func probeCLI(ctx context.Context, p Provider) Health {
+func probeCLI(ctx context.Context, p Provider) (Health, error) {
 	if len(p.HealthCommand) > 0 {
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
@@ -109,17 +115,17 @@ func probeCLI(ctx context.Context, p Provider) Health {
 		if err != nil {
 			// A status command usually exits non-zero when logged out; treat that
 			// as auth rather than down so the dot is grey-for-login, not unreachable.
-			return HealthAuth
+			return HealthAuth, err
 		}
 		if p.HealthExpect != "" && !strings.Contains(string(out), p.HealthExpect) {
-			return HealthAuth // ran fine but reports "not logged in"
+			return HealthAuth, nil // ran fine but reports "not logged in"
 		}
-		return HealthOK
+		return HealthOK, nil
 	}
 	if p.Credential != "" {
 		if _, err := os.Stat(p.Credential); err != nil {
-			return HealthAuth
+			return HealthAuth, err
 		}
 	}
-	return HealthOK
+	return HealthOK, nil
 }

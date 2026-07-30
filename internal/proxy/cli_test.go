@@ -195,23 +195,23 @@ func TestRunCLIFailureFailsOver(t *testing.T) {
 
 func TestProbeCLI(t *testing.T) {
 	ctx := context.Background()
-	if got := probeCLI(ctx, Provider{Kind: "cli", HealthCommand: []string{"true"}}); got != HealthOK {
+	if got, _ := probeCLI(ctx, Provider{Kind: "cli", HealthCommand: []string{"true"}}); got != HealthOK {
 		t.Errorf("health_command true = %v, want HealthOK", got)
 	}
 	// A status command that exits non-zero means logged out → grey (auth).
-	if got := probeCLI(ctx, Provider{Kind: "cli", HealthCommand: []string{"false"}}); got != HealthAuth {
+	if got, _ := probeCLI(ctx, Provider{Kind: "cli", HealthCommand: []string{"false"}}); got != HealthAuth {
 		t.Errorf("health_command false = %v, want HealthAuth", got)
 	}
-	if got := probeCLI(ctx, Provider{Kind: "cli", Credential: "/no/such/file"}); got != HealthAuth {
+	if got, _ := probeCLI(ctx, Provider{Kind: "cli", Credential: "/no/such/file"}); got != HealthAuth {
 		t.Errorf("missing credential = %v, want HealthAuth", got)
 	}
 	// health_expect: output must contain the marker, else auth (logged out).
 	logged := Provider{Kind: "cli", HealthCommand: []string{"sh", "-c", `echo '{"loggedIn": true}'`}, HealthExpect: `"loggedIn": true`}
-	if got := probeCLI(ctx, logged); got != HealthOK {
+	if got, _ := probeCLI(ctx, logged); got != HealthOK {
 		t.Errorf("health_expect matched = %v, want HealthOK", got)
 	}
 	out := Provider{Kind: "cli", HealthCommand: []string{"sh", "-c", `echo '{"loggedIn": false}'`}, HealthExpect: `"loggedIn": true`}
-	if got := probeCLI(ctx, out); got != HealthAuth {
+	if got, _ := probeCLI(ctx, out); got != HealthAuth {
 		t.Errorf("health_expect missing = %v, want HealthAuth", got)
 	}
 }

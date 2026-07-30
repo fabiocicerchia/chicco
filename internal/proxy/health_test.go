@@ -35,7 +35,7 @@ func TestProbeProvider(t *testing.T) {
 		{"http://127.0.0.1:9", HealthDown}, // connection refused
 	}
 	for _, c := range cases {
-		got := probeProvider(context.Background(), Provider{BaseURL: c.base, APIKey: "k"})
+		got, _ := probeProvider(context.Background(), Provider{BaseURL: c.base, APIKey: "k"})
 		if got != c.want {
 			t.Errorf("probeProvider(%s) = %v, want %v", c.base, got, c.want)
 		}
