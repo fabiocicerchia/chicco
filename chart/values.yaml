@@ -1,0 +1,100 @@
+kind: Deployment
+replicaCount: 1
+
+image:
+  repository: ghcr.io/fabiocicerchia/chicco
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+command: []
+args: ["-config", "/etc/chicco/chicco.yaml", "-state", "/var/lib/chicco/chicco-state.json"]
+
+env: {}
+envFrom: []
+
+config:
+  mountPath: /etc/chicco
+  files:
+    chicco.yaml: |
+      # Replace with the real chicco config.
+      listen: 0.0.0.0:41986
+
+# Only used when kind: CronJob.
+cron:
+  schedule: "0 * * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  restartPolicy: OnFailure
+  backoffLimit: 3
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 41986
+  targetPort: 41986
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: chicco.local
+  path: /
+  pathType: Prefix
+  tls: []
+
+livenessProbe:
+  httpGet: {path: /health, port: http}
+  initialDelaySeconds: 10
+readinessProbe:
+  httpGet: {path: /health, port: http}
+
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {memory: 256Mi}
+
+# chicco persists state to chicco-state.json.
+persistence:
+  enabled: true
+  mountPath: /var/lib/chicco
+  existingClaim: ""
+  size: 1Gi
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+rbac:
+  create: false
+  clusterWide: true
+  rules:
+    - apiGroups: ["*"]
+      resources: ["*"]
+      verbs: ["get", "list", "watch"]
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: {type: RuntimeDefault}
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: ["ALL"]}
+
+extraVolumes: []
+extraVolumeMounts: []
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

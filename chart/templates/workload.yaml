@@ -1,0 +1,32 @@
+{{- if eq .Values.kind "Deployment" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels: {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "app.podSpec" . | nindent 4 }}
+{{- else if eq .Values.kind "CronJob" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels: {{- include "app.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cron.schedule | quote }}
+  suspend: {{ .Values.cron.suspend }}
+  concurrencyPolicy: {{ .Values.cron.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .Values.cron.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cron.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.cron.backoffLimit }}
+      template:
+        {{- include "app.podSpec" . | nindent 8 }}
+{{- else }}
+{{- fail (printf "kind must be Deployment or CronJob, got %q" .Values.kind) }}
+{{- end }}
