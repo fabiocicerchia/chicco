@@ -4,3 +4,9 @@ description: Helm chart for chicco
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+
+# License of the packaged application. ArtifactHub reads this annotation.
+annotations:
+  artifacthub.io/license: MIT
+sources:
+  - https://github.com/fabiocicerchia/chicco
