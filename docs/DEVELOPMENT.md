@@ -76,3 +76,14 @@ keys, no network).
 `.github/workflows/ci.yml` runs on every push and PR: `test` (build + vet +
 race tests), `lint` (golangci-lint), `vuln` (govulncheck), and `secrets`
 (gitleaks over the full history). `release.yml` runs GoReleaser on a `v*` tag.
+
+## Build
+
+```sh
+make build      # -> ./bin/chicco
+make test       # go test -race ./...
+make snapshot   # local GoReleaser build (dist/) — needs goreleaser
+```
+
+See [docs/DEVELOPMENT.md](DEVELOPMENT.md) for all make targets and the
+local-development requirements.

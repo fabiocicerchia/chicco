@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chicco — A local, OpenAI- and Anthropic-compatible rotation proxy.</title>
+<meta name="description" content="A tiny local, OpenAI- and Anthropic-compatible rotation proxy. chicco fronts a pool of providers behind one stable endpoint: it forwards each request — OpenAI chat completions (/v1/chat/completions), Anthropic messages (/v1/messages), or embeddings (/v1/embeddings) — to the next provider in…">
+<style>
+:root{--accent:#22d3ee;--accent2:#6366f1}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2.5rem 1.5rem;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:linear-gradient(160deg,#0b0f1a,#141b2d 60%,#1b2338);color:#eef1f8}
+.card{max-width:700px;width:100%}
+h1{font-size:2.5rem;margin:0 0 .35rem;line-height:1.15;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;
+  background-clip:text;color:transparent;display:inline-block}
+.tagline{font-size:1.15rem;color:#c7cde0;margin:0 0 1.4rem;font-weight:500}
+p.desc{color:#aab2c8;line-height:1.65;margin:0 0 1.8rem}
+.install-label{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--accent2);margin:0 0 .5rem;font-weight:700}
+pre{background:#0d1220;border:1px solid #2a3350;border-radius:10px;padding:1rem 1.2rem;
+  overflow-x:auto;font-size:.9rem;margin:0 0 .6rem}
+code{color:#9be9a8;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.alt{color:#6b7591;font-size:.85rem;margin:0 0 1.8rem}
+.alt code{color:#8891ab;background:rgba(255,255,255,.05);padding:.1rem .35rem;border-radius:4px}
+.links{margin-top:1.6rem;display:flex;gap:.9rem;flex-wrap:wrap;align-items:center}
+a.btn{color:#0b0f1a;background:linear-gradient(90deg,var(--accent),var(--accent2));
+  padding:.65rem 1.3rem;border-radius:8px;text-decoration:none;font-weight:700}
+a.plain{color:var(--accent2);text-decoration:none;font-weight:600}
+footer{margin-top:2.2rem;color:#5c6684;font-size:.82rem}
+@media (prefers-color-scheme: light){
+  body{background:linear-gradient(160deg,#f6f8ff,#eef1fb 60%,#e9edfc);color:#1b2338}
+  .tagline{color:#3d4560} p.desc{color:#4b5470}
+  pre{background:#fff;border-color:#dde3f5} code{color:#0f7a34}
+  .alt{color:#7b849c} .alt code{background:rgba(0,0,0,.05);color:#4b5470}
+  footer{color:#7b849c} a.btn{color:#fff}
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🔀 chicco</h1>
+  <p class="tagline">A local, OpenAI- and Anthropic-compatible rotation proxy.</p>
+  <p class="desc">A tiny local, OpenAI- and Anthropic-compatible rotation proxy. chicco fronts a pool of providers behind one stable endpoint: it forwards each request — OpenAI chat completions (/v1/chat/completions), Anthropic messages (/v1/messages), or embeddings (/v1/embeddings) — to the next provider in…</p>
+  <div class="install-label">Install</div>
+  <pre><code>curl -fsSL https://raw.githubusercontent.com/fabiocicerchia/chicco/main/install.sh | sh</code></pre>
+  <p class="alt">or: <code>go install github.com/fabiocicerchia/chicco@latest</code></p>
+  <div class="links">
+    <a class="btn" href="https://github.com/fabiocicerchia/chicco">GitHub →</a>
+    <a class="plain" href="https://github.com/fabiocicerchia/chicco#readme">Full docs</a>
+  </div>
+  <footer>MIT · Fabio Cicerchia</footer>
+</div>
+</body>
+</html>

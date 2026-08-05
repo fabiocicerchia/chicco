@@ -66,3 +66,13 @@ directory, and the calling agent expects to apply edits itself from the returned
 text. The presets do this where the tool allows it (claude `--bare --tools ""`,
 codex `--sandbox read-only`, qwen plain `-p`); kiro has no clean answer-only mode,
 so it's the least suitable here.
+
+## CLI-backed providers (`kind: cli`)
+
+A provider can run a **local CLI tool** (claude, codex, kiro, a qwen CLI, …) instead
+of making an HTTP call, appearing as just another model behind the same
+`:41986/v1` endpoint with the same cooldown / failover / dashboard behaviour.
+Adding a new tool is a YAML entry, no code. See
+[docs/CLI_PROVIDERS.md](CLI_PROVIDERS.md) for the field reference, auth/limit
+detection, and the no-tools-off caveat — and `chicco.yaml` for ready presets
+(claude, codex, gemini, qwen, kiro).
