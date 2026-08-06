@@ -1,0 +1,23 @@
+# Refreshes this repo's CI carbon-footprint badge nightly and publishes
+# badge.json to the gh-pages branch.
+#
+# Source: fabiocicerchia/carbon-badge -> .github/workflows/carbon-badge.yml
+
+name: carbon-badge
+
+on:
+  schedule: [{ cron: "17 2 * * *" }]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: fabiocicerchia/carbon-badge@4e8b213b23fb64f7135ac9d8d96622bf9bb1581c  # v0.1.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
