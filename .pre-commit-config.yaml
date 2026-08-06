@@ -1,0 +1,77 @@
+# Run `pre-commit install` once per clone (or `make setup`).
+#
+# Hooks are pinned to a commit SHA with the tag in a comment, the same policy the
+# GitHub Actions workflows use: a tag can be moved, a SHA cannot. CI runs this
+# file (`pre-commit/action`), so what is here is what gates a pull request.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # v6.0.0
+    hooks:
+      # Whitespace and line endings.
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+
+      # Parseable data files: a broken manifest fails here rather than in a
+      # deploy.
+      - id: check-yaml
+        # k8s manifests are legitimately multi-document, and Helm templates are Go
+        # templates rather than YAML — the parser cannot read either as-is. The
+        # exclude is path-relative so it catches chart/ and charts/<name>/ alike.
+        args: [--allow-multiple-documents]
+        exclude: (^|/)templates/
+      - id: check-json
+      - id: check-toml
+
+      # Things that are only painful once they are in history.
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: forbid-submodules
+      - id: check-vcs-permalinks
+
+      # A script without its executable bit does not run — the failure mode
+      # `.githooks/pre-commit` had in most of these repos.
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # Local hooks rather than a third-party golang mirror: the toolchain is
+  # already required to build, so there is nothing extra to install.
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        # -w rather than a bare -l: `gofmt -l` exits 0 even when it lists a file,
+        # so it can never fail the hook. Rewriting is what pre-commit detects.
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        types: [go]
+        pass_filenames: false
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # v0.11.0.1
+    hooks:
+      - id: shellcheck
+        # warning and above. The style/info notes are mostly SC1091 (a sourced
+        # file the linter cannot see), which is noise in a repo of small scripts.
+        args: [--severity=warning]
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: 2eece55955ced00200be9729e9728cb7dacca505  # v2.15.1
+    hooks:
+      - id: hadolint-docker
