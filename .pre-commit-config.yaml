@@ -29,7 +29,7 @@ repos:
       # it stays in the baseline rather than the language block below.
       - id: check-ast
       # Sorts and dedupes requirements files, which is where most of the
-      # merge conflicts in docs/requirements.txt came from.
+      # merge conflicts in a requirements file came from.
       - id: requirements-txt-fixer
 
       # Things that are only painful once they are in history.
