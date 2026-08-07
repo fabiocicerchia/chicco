@@ -1,0 +1,37 @@
+# gandalf reviewing this repo's pull requests.
+#
+# Runs gandalf's scanners in one prebuilt container and posts every finding as
+# an inline review comment on the file:line it flags, plus (by default) ingests
+# them into GitHub Code Scanning. Nothing is installed on the runner and no
+# secret beyond the built-in GITHUB_TOKEN is needed.
+#
+# Source: fabiocicerchia/gandalf -> examples/github-actions/gandalf-pr-review.yml
+
+name: gandalf-pr-review
+
+on:
+  pull_request:
+
+# read the code, post the review, and upload code-scanning results.
+permissions:
+  contents: read
+  packages: read # pull the ghcr scanner image
+  pull-requests: write
+  security-events: write
+
+concurrency:
+  group: gandalf-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: gandalf inline review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0 # need base + head + their merge-base for the PR diff
+
+      - uses: fabiocicerchia/gandalf@50c7b58957429861ede77eecfb90dc8a04ae35f3  # v0.1.0
+        with:
+          code-scanning: ${{ vars.GANDALF_INGEST_CODE_SCANNING || 'true' }}

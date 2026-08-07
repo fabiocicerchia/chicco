@@ -28,7 +28,7 @@ COPY --from=build /out/chicco /usr/local/bin/chicco
 USER chicco
 EXPOSE 41986
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-    CMD wget -qO- http://127.0.0.1:41986/health || exit 1
+    CMD ["/bin/sh", "-c", "wget -qO- http://127.0.0.1:41986/health || exit 1"]
 ENTRYPOINT ["/usr/local/bin/chicco"]
 # Defaults assume the conventional mount points from docs/DOCKER.md; override
 # by passing different flags after the image name (they replace this CMD).

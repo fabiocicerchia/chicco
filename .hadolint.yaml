@@ -1,0 +1,14 @@
+failure-threshold: warning
+
+ignored:
+  # Pinning every apt/apk/pip package version is unmaintainable on a base image
+  # that gets rebuilt weekly; the digest pin on FROM is what actually pins the
+  # build, and the application's own dependencies are pinned in its lock file.
+  - DL3008  # Pin versions in apt-get install (apt-get install <pkg>=<version>)
+  - DL3018  # Pin versions in apk add (apk add <pkg>=<version>)
+  - DL3013  # Pin versions in pip install (pip install <pkg>==<version>)
+
+trustedRegistries:
+  - docker.io
+  - ghcr.io
+  - gcr.io
