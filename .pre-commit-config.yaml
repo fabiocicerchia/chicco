@@ -11,6 +11,9 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: mixed-line-ending
+      # A UTF-8 BOM makes a shebang unreadable and a JSON parser choke, and it
+      # is invisible in every diff view — strip it rather than debug it.
+      - id: fix-byte-order-marker
 
       # Parseable data files: a broken manifest fails here rather than in a
       # deploy.
@@ -22,6 +25,12 @@ repos:
         exclude: (^|/)templates/
       - id: check-json
       - id: check-toml
+      # Python only (types: [python]) — a no-op in a repo with no .py files, so
+      # it stays in the baseline rather than the language block below.
+      - id: check-ast
+      # Sorts and dedupes requirements files, which is where most of the
+      # merge conflicts in docs/requirements.txt came from.
+      - id: requirements-txt-fixer
 
       # Things that are only painful once they are in history.
       - id: check-added-large-files
@@ -33,12 +42,15 @@ repos:
       - id: forbid-submodules
       - id: check-vcs-permalinks
 
-      # A script without its executable bit does not run — the failure mode
-      # `.githooks/pre-commit` had in most of these repos.
+      # A script without its executable bit does not run.
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
 
       - id: detect-private-key
+      - id: detect-aws-credentials
+        # Without this the hook fails on any machine that has no
+        # ~/.aws/credentials — i.e. every CI runner — regardless of the diff.
+        args: [--allow-missing-credentials]
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # v8.30.1
