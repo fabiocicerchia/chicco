@@ -1,12 +1,18 @@
-# Refreshes this repo's CI carbon-footprint badge nightly and publishes
+# Refreshes this repo's CI carbon-footprint badge weekly and publishes
 # badge.json to the gh-pages branch.
+#
+# Weekly, not nightly: the badge reports a 30-day rolling figure, so six of
+# seven nightly runs republished a number that had barely moved — burning CI
+# carbon to measure CI carbon. It also skips itself entirely when nothing
+# landed on the default branch that week, since with no new runs there is
+# nothing new to measure.
 #
 # Source: fabiocicerchia/carbon-badge -> .github/workflows/carbon-badge.yml
 
 name: carbon-badge
 
 on:
-  schedule: [{ cron: "17 2 * * *" }]
+  schedule: [{ cron: "17 2 * * 1" }]
   workflow_dispatch:
 
 permissions:
@@ -17,7 +23,22 @@ jobs:
   badge:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: fabiocicerchia/carbon-badge@4e8b213b23fb64f7135ac9d8d96622bf9bb1581c  # v0.1.0
+      - name: Any activity in the past week?
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          since=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          # Commits on the default branch only: the gh-pages push this workflow
+          # makes would otherwise count as activity and keep it awake forever.
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/commits?sha=${GITHUB_REF_NAME}&since=${since}&per_page=1" --jq 'length')
+          echo "recent=${n}" >> "$GITHUB_OUTPUT"
+          [ "${n}" != "0" ] || echo "No commits since ${since} — skipping the refresh."
+
+      - if: steps.gate.outputs.recent != '0' || github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - if: steps.gate.outputs.recent != '0' || github.event_name == 'workflow_dispatch'
+        uses: fabiocicerchia/carbon-badge@4e8b213b23fb64f7135ac9d8d96622bf9bb1581c  # v0.1.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
