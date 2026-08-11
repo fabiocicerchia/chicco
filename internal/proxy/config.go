@@ -8,16 +8,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DefaultAddr is the port chicco listens on when chicco.yaml sets no addr.
-const DefaultAddr = ":41986"
+// DefaultAddr is the address chicco listens on when chicco.yaml sets no addr.
+// Loopback, not ":41986": the default config has no api_key, so a wildcard bind
+// would hand every provider key to anything that can reach the port. Set addr
+// explicitly to expose it, and set api_key at the same time — RequireAuthOnBind
+// refuses the combination.
+const DefaultAddr = "127.0.0.1:41986"
 
 // Config is chicco.yaml.
 type Config struct {
 	Addr string `yaml:"addr"`
 	// APIKey, when set, is a shared secret guarding chicco's own inbound endpoints:
 	// callers must present it as `Authorization: Bearer <key>`. Empty (the default)
-	// leaves chicco open, which is fine bound to 127.0.0.1; set it when exposing
-	// chicco beyond localhost. ${VAR} is expanded from the environment.
+	// leaves chicco open, which is why the default addr is loopback-only; binding
+	// anywhere else without a key is refused at startup. ${VAR} is expanded from
+	// the environment.
 	APIKey    string     `yaml:"api_key"`
 	Providers []Provider // populated by UnmarshalYAML from either a list or a map
 	Models    []Model    `yaml:"models"` // virtual model routing table (see Rotator.activeForModel)

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -22,6 +23,42 @@ import (
 // open. It only guards the header read, not the body or a streamed response,
 // so long-running chat completions are unaffected.
 const readHeaderTimeout = 10 * time.Second
+
+// RequireAuthOnBind refuses to let chicco be reachable and unauthenticated at the
+// same time. chicco holds a working API key for every configured provider, so an
+// open listener on a routable address hands those keys to anything that can reach
+// the port. Startup is the only place to catch it — once serving, the exposure has
+// already happened.
+func RequireAuthOnBind(addr, apiKey string) error {
+	if apiKey != "" || isLoopback(addr) {
+		return nil
+	}
+	return fmt.Errorf("chicco: addr %s is not loopback and no api_key is set: "+
+		"set api_key in chicco.yaml, or bind to 127.0.0.1", addr)
+}
+
+// authState describes the inbound auth posture for the startup log, so "is this
+// thing open?" is answerable from the log line rather than by reading the config.
+func authState(apiKey string) string {
+	if apiKey == "" {
+		return "no api_key — open"
+	}
+	return "api_key set"
+}
+
+// isLoopback reports whether addr binds only the loopback interface. A bare
+// ":41986" or "0.0.0.0:41986" is not loopback: it listens on every interface.
+func isLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
 
 // Options configures a chicco run. All fields come from cmd/chicco flags.
 type Options struct {
@@ -42,6 +79,9 @@ func Run(opts Options) error {
 	}
 	if opts.Addr != "" {
 		cfg.Addr = opts.Addr
+	}
+	if err := RequireAuthOnBind(cfg.Addr, cfg.APIKey); err != nil {
+		return err
 	}
 
 	rot := NewRotator(cfg.Providers, cfg.Models)
@@ -102,7 +142,7 @@ func Run(opts Options) error {
 	// systemd, etc.) — the dashboard needs a real TTY.
 	if opts.Headless || !isatty.IsTerminal(os.Stdout.Fd()) {
 		log.SetOutput(io.MultiWriter(os.Stderr, logs)) // keep stderr; also feed the web dashboard
-		log.Printf("chicco %s listening on %s — rotating across %d provider(s): %v", opts.Version, cfg.Addr, len(active), names)
+		log.Printf("chicco %s listening on %s (%s) — rotating across %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(active), names)
 		srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
 		return srv.ListenAndServe()
 	}
@@ -113,7 +153,7 @@ func Run(opts Options) error {
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
 	go func() {
-		log.Printf("chicco %s listening on %s — %d provider(s): %v", opts.Version, cfg.Addr, len(active), names)
+		log.Printf("chicco %s listening on %s (%s) — %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(active), names)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Println("chicco: server error:", err)
 		}

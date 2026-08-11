@@ -21,7 +21,11 @@ config:
   files:
     chicco.yaml: |
       # Replace with the real chicco config.
-      listen: 0.0.0.0:41986
+      # A pod has to bind 0.0.0.0 to be reachable through the Service, so api_key
+      # is required here: chicco refuses to start on a non-loopback addr without
+      # one, since it holds a live key for every provider.
+      addr: "0.0.0.0:41986"
+      api_key: ${CHICCO_API_KEY}
 
 # Only used when kind: CronJob.
 cron:

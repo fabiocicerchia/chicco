@@ -18,12 +18,14 @@
 # Use tpd for token-capped providers (Groq, Cerebras) and rpd for request-capped
 # ones (Google free tier). Omit quota: entirely to show usage without a bar.
 
-addr: ":41986"
+addr: "127.0.0.1:41986"
 
 # api_key (optional): a shared secret guarding chicco's own inbound endpoints.
-# Empty leaves chicco open, which is fine on the 127.0.0.1 default; set it when
-# you bind a public addr so callers must send `Authorization: Bearer <key>`
-# (every endpoint except /health). ${VAR} is expanded from the environment.
+# Empty leaves chicco open, which is why the addr above is loopback-only. Binding
+# any other address without this set is refused at startup — chicco holds a live
+# key for every provider below. Set it and callers must send
+# `Authorization: Bearer <key>` (every endpoint except /health).
+# ${VAR} is expanded from the environment.
 # api_key: ${CHICCO_API_KEY}
 
 # quota: (optional, top-level) caps usage across every provider COMBINED — same

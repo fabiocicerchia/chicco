@@ -3,7 +3,7 @@
 ## Configuration — `chicco.yaml`
 
 ```yaml
-addr: ":41986"          # optional; this is the default
+addr: "127.0.0.1:41986" # optional; this is the default — loopback only
 
 providers:
   - name: groq
@@ -70,8 +70,16 @@ examples.
 ### Guarding the endpoint (`api_key`)
 
 chicco has no inbound authentication by default — anyone who can reach `addr`
-can use it, which is fine on the `127.0.0.1` default. If you bind a public
-address, set a top-level `api_key` so callers must present it:
+can use it, and use it to spend every provider key chicco holds. That is why the
+default `addr` is loopback-only. **Binding anywhere else without an `api_key` is
+refused at startup**, since serving is too late to catch it:
+
+```
+chicco: addr 0.0.0.0:41986 is not loopback and no api_key is set:
+set api_key in chicco.yaml, or bind to 127.0.0.1
+```
+
+To bind a routable address, set a top-level `api_key` so callers must present it:
 
 ```yaml
 api_key: ${CHICCO_API_KEY}   # inbound shared secret; ${VAR} expanded from env

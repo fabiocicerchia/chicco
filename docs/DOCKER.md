@@ -47,16 +47,27 @@ Same `chicco.yaml` / `.env` split as the non-Docker [Quick start](../README.md#q
 `api_key: ${GROQ_API_KEY}` style references are expanded from the
 container's environment, so pass your `.env` straight through:
 
+In a container chicco has to bind `0.0.0.0` to be reachable through the published
+port, so the loopback default does not apply — set `addr` and `api_key` together
+in `chicco.yaml`:
+
+```yaml
+addr: "0.0.0.0:41986"
+api_key: ${CHICCO_API_KEY}   # required: 0.0.0.0 without a key is refused at startup
+```
+
 ```sh
-docker run --rm -p 41986:41986 \
+docker run --rm -p 127.0.0.1:41986:41986 \
   -v "$(pwd)/chicco.yaml:/etc/chicco/chicco.yaml:ro" \
   --env-file .env \
   chicco
 ```
 
 Then point any OpenAI client at `http://127.0.0.1:41986/v1`, same as a
-non-Docker run. The mount is read-only (`:ro`) since chicco never writes to
-its own config.
+non-Docker run, passing `CHICCO_API_KEY` as the client's API key. The publish is
+bound to `127.0.0.1` so the port is not exposed on every host interface; drop
+that prefix only when you mean to serve the network. The mount is read-only
+(`:ro`) since chicco never writes to its own config.
 
 ## Persisting token usage across restarts
 
@@ -65,7 +76,7 @@ set by the image's `CMD`) lives in the container's writable layer — usage
 counters reset if the container is removed. Mount a volume to keep them:
 
 ```sh
-docker run --rm -p 41986:41986 \
+docker run --rm -p 127.0.0.1:41986:41986 \
   -v "$(pwd)/chicco.yaml:/etc/chicco/chicco.yaml:ro" \
   -v chicco-state:/var/lib/chicco \
   --env-file .env \
@@ -89,7 +100,7 @@ free, so `docker logs <container>` shows the same log lines the TUI's log
 pane would. To get the live TUI dashboard instead, allocate a pty:
 
 ```sh
-docker run --rm -it -p 41986:41986 \
+docker run --rm -it -p 127.0.0.1:41986:41986 \
   -v "$(pwd)/chicco.yaml:/etc/chicco/chicco.yaml:ro" \
   --env-file .env \
   chicco
@@ -105,7 +116,7 @@ services:
   chicco:
     image: ghcr.io/fabiocicerchia/chicco:latest   # or `build: .` to build from source
     ports:
-      - "41986:41986"
+      - "127.0.0.1:41986:41986"
     volumes:
       - ./chicco.yaml:/etc/chicco/chicco.yaml:ro
       - chicco-state:/var/lib/chicco

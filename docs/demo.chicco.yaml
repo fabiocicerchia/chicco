@@ -2,7 +2,7 @@
 # Every provider is a `kind: cli` backed by a local shell command, so the demo
 # needs no API keys and makes no network calls. NOT a real config — see the
 # top-level chicco.yaml for that.
-addr: ":41986"
+addr: "127.0.0.1:41986"
 
 providers:
   # Two healthy providers that answer instantly.
