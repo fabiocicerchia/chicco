@@ -12,12 +12,8 @@ name: gandalf-pr-review
 on:
   pull_request:
 
-# read the code, post the review, and upload code-scanning results.
 permissions:
   contents: read
-  packages: read # pull the ghcr scanner image
-  pull-requests: write
-  security-events: write
 
 concurrency:
   group: gandalf-pr-${{ github.event.pull_request.number }}
@@ -25,6 +21,12 @@ concurrency:
 
 jobs:
   review:
+    # read the code, post the review, and upload code-scanning results.
+    permissions:
+      contents: read
+      packages: read # pull the ghcr scanner image
+      pull-requests: write
+      security-events: write
     name: gandalf inline review
     runs-on: ubuntu-latest
     steps:
