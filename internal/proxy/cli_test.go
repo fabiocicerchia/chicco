@@ -296,6 +296,27 @@ func TestCLIFailureClassifies(t *testing.T) {
 	}
 }
 
+// TestCLIFailureKeepsTheReason uses gemini-cli's real output: a warning line
+// first, then a long stack trace, with the actual cause ("Error authenticating")
+// in the middle and repeated at the end. Reported head-first and capped at 512
+// bytes, all the caller ever saw was the harmless warning — and the auth error,
+// which names no login, classified as a transient 502 and was retried every
+// minute forever instead of greying the provider out.
+func TestCLIFailureKeepsTheReason(t *testing.T) {
+	msg := "Approval mode overridden by --approval-mode plan\n" +
+		strings.Repeat("    at throwIneligibleOrProjectIdError (file:///home/x/bundle/chunk.js:310030:11)\n", 12) +
+		"An unexpected critical error occurred: IneligibleTierError: This client is no longer supported"
+
+	up := cliFailure(msg)
+	if up.status != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 (auth → grey, long cooldown)", up.status)
+	}
+	body, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
+	if !strings.Contains(string(body), "no longer supported") {
+		t.Errorf("reported body lost the reason it failed: %q", body)
+	}
+}
+
 func TestParseResetDuration(t *testing.T) {
 	cases := []struct {
 		msg  string

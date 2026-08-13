@@ -35,7 +35,11 @@ var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
 // logged-out tool greys in the dashboard (HealthAuth) rather than just cooling
 // down. It only runs on an already-failed call, so a false positive merely picks
 // the longer cooldown.
-var authFailureRe = regexp.MustCompile(`(?i)(not logged in|/login|log ?in|sign ?in|unauthenticated|unauthorized|expired|invalid (api )?key|no credentials|forbidden|\b40[13]\b)`)
+// "error authenticating" / "no longer supported" / "ineligible" are in there for
+// the shape gemini-cli fails with when Google drops a client or tier: an auth
+// error that never says "login", and so used to read as a transient 502 and be
+// retried every minute forever instead of greying out.
+var authFailureRe = regexp.MustCompile(`(?i)(not logged in|/login|log ?in|sign ?in|unauthenticat|authenticating|authentication (failed|error)|ineligible|no longer supported|unauthorized|expired|invalid (api )?key|no credentials|forbidden|\b40[13]\b)`)
 
 // rateLimitRe matches the messages CLIs print when a usage window is exhausted, so
 // the provider is cooled down until the window reopens (parseResetDuration) rather
@@ -46,22 +50,40 @@ var rateLimitRe = regexp.MustCompile(`(?i)(rate.?limit|usage limit|limit reached
 // no parseable reset time.
 const rateLimitCooldown = time.Hour
 
+// cliErrSnippet is how much of a failed upstream's body is kept for the log line
+// and the 503 shown to the caller (see dispatch, which reads exactly this much).
+const cliErrSnippet = 512
+
+// stackFrameRe matches a JS/Python-style stack frame line, which is what fills a
+// Node CLI's stderr and pushes the actual error out of cliErrSnippet.
+var stackFrameRe = regexp.MustCompile(`(?m)^\s+at .*\n?`)
+
 // cliFailure wraps a failed CLI run as a non-2xx upstream so handleChat cools the
 // provider down and fails over: 401 for an auth problem (greys the provider, long
 // cooldown); 429 with the parsed reset time for a usage-limit hit (so the dashboard
 // shows when the next window opens); otherwise a transient 502.
 func cliFailure(msg string) *upstream {
+	// Classify on the WHOLE message, report the useful part of it. The caller
+	// only ever reads the first 512 bytes of an error body (see dispatch), and a
+	// Node CLI spends most of those on a stack trace: gemini-cli leads with an
+	// "Approval mode overridden" notice, then a dozen `at …` frames, and only
+	// then says it failed to authenticate. Head-first, that snippet showed the
+	// warning and nothing else. Drop the frames and keep the tail.
+	body := strings.TrimSpace(stackFrameRe.ReplaceAllString(msg, ""))
+	if len(body) > cliErrSnippet {
+		body = "…" + body[len(body)-cliErrSnippet:]
+	}
 	switch {
 	case authFailureRe.MatchString(msg):
-		return &upstream{status: http.StatusUnauthorized, body: io.NopCloser(strings.NewReader(msg))}
+		return &upstream{status: http.StatusUnauthorized, body: io.NopCloser(strings.NewReader(body))}
 	case rateLimitRe.MatchString(msg):
 		d := parseResetDuration(msg)
 		if d <= 0 {
 			d = rateLimitCooldown
 		}
-		return &upstream{status: http.StatusTooManyRequests, retryAfter: d, body: io.NopCloser(strings.NewReader(msg))}
+		return &upstream{status: http.StatusTooManyRequests, retryAfter: d, body: io.NopCloser(strings.NewReader(body))}
 	default:
-		return &upstream{status: http.StatusBadGateway, body: io.NopCloser(strings.NewReader(msg))}
+		return &upstream{status: http.StatusBadGateway, body: io.NopCloser(strings.NewReader(body))}
 	}
 }
 

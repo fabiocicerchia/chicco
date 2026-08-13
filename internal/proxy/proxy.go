@@ -1073,7 +1073,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 			continue
 		}
 		if up.status < 200 || up.status >= 300 {
-			snippet, _ := io.ReadAll(io.LimitReader(up.body, 512))
+			snippet, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
 			up.body.Close()
 			text := strings.TrimSpace(string(snippet))
 			cls := classifyUpstream(up.status, text, up.retryAfter)
