@@ -148,6 +148,17 @@ func probeProvider(ctx context.Context, p Provider) (Health, error) {
 // this is how a logged-out tool greys (HealthAuth). With no health_command, stat
 // the credential file (missing = needs login); otherwise assume healthy.
 func probeCLI(ctx context.Context, p Provider) (Health, error) {
+	// The tool has to exist before anything else is worth asking. A provider
+	// configured for a CLI that isn't installed here (common in the container
+	// image, which ships none of them) otherwise probed green — its credential
+	// file mounted from the host, or no health_command at all — and only failed
+	// at request time, with the binary's own "no such file or directory" as the
+	// caller's 502.
+	if p.Command != "" {
+		if _, err := exec.LookPath(p.Command); err != nil {
+			return HealthDown, err
+		}
+	}
 	if len(p.HealthCommand) > 0 {
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()

@@ -27,7 +27,8 @@ no code.
 | `prompt_stdin` | pipe `{{prompt}}` on stdin instead of as an arg |
 | `output_file` | read the answer from the temp `{{output_file}}` path (codex) |
 | `output` | `text` (default, stdout verbatim) or `json` |
-| `result_path` / `tokens_path` | dotted JSON paths when `output: json` |
+| `result_path` / `tokens_path` | dotted JSON paths when `output: json` (text, completion tokens) |
+| `input_tokens_path` | dotted JSON path to the prompt token count (e.g. claude's `usage.input_tokens`); without it chicco estimates |
 | `error_path` | dotted JSON path that, when truthy, marks the call failed → cooldown + fail over (e.g. claude's `is_error`) |
 | `strip_ansi` | strip colour codes from output (kiro) |
 | `health_command` / `health_expect` | health: run a local auth-status command; greys (auth) when it exits non-zero or its output lacks `health_expect` (e.g. `["claude","auth","status"]` + `'"loggedIn": true'`) |
@@ -48,7 +49,11 @@ request fails over to the next. chicco reads the failure message:
   my quota reset" command, so this is detected from the limit error, not polled.
 
 When a tool doesn't report token usage, chicco estimates it (`≈ len/4`) so the
-dashboard bar still moves. See `chicco.yaml` for ready presets.
+dashboard bar still moves, and the reply's `usage` carries the estimate rather
+than a misleading `0`. Point `tokens_path` / `input_tokens_path` at the tool's
+own counts (claude's `--output-format json` reports both) for exact numbers —
+there is no generic exact answer without a per-model BPE vocabulary. See
+`chicco.yaml` for ready presets.
 
 **Login state in the dashboard.** With a `health_command` (a free local
 auth-status check like `claude auth status`), the boot/periodic probe shows the
@@ -59,13 +64,29 @@ auth and greys it (see above).
 
 **Tools are text-in / text-out — keep the CLI's own tools off.** chicco flattens
 the request to one prompt and reads back plain text; it does not support OpenAI
-function-calling (a `tools` array in the request is ignored, with a logged warning).
-More importantly, run each CLI in a **no-tools / read-only** mode so it can't edit
-files or run commands on the host — any edits would land in chicco's working
-directory, and the calling agent expects to apply edits itself from the returned
+function-calling. A request carrying a `tools` array is therefore **routed past
+every CLI provider**, and gets a `503` naming the reason if only CLI providers
+back the requested model. That is deliberate: served by a CLI, the model writes
+the call out as prose (often pseudo-XML) with `finish_reason: "stop"`, and a
+caller like Claude Code or opencode reads that as "the model chose not to act"
+and reports no changes. A loud failure beats a silent non-answer — point
+tool-using agents at an HTTP provider.
+
+More importantly, run each CLI in a **no-tools / read-only** mode so it can't
+edit files or run commands on the host — any edits would land in chicco's own
+working directory (in Docker, inside the container), *not* in the caller's
+worktree, and the calling agent expects to apply edits itself from the returned
 text. The presets do this where the tool allows it (claude `--bare --tools ""`,
 codex `--sandbox read-only`, qwen plain `-p`); kiro has no clean answer-only mode,
 so it's the least suitable here.
+
+**A CLI provider is only as available as its binary.** The tool has to be
+installed wherever chicco runs — the Docker image ships none of them, so a CLI
+provider configured there is dead until the binary (and its login) are mounted
+in. The health probe checks the command exists before anything else and marks the
+provider **down** when it doesn't, so this shows on the dashboard and in
+`/health` rather than surfacing as a `502 no such file or directory` on the first
+real request.
 
 ## CLI-backed providers (`kind: cli`)
 

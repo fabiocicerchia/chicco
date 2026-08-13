@@ -27,30 +27,36 @@ func TestSplitMessages(t *testing.T) {
 }
 
 func TestDotGetAndExtract(t *testing.T) {
-	p := Provider{Output: "json", ResultPath: "result", TokensPath: "usage.output_tokens"}
-	text, tokens, failed := extractCompletion(p, []byte(`{"result":"done","usage":{"output_tokens":42}}`))
-	if text != "done" || tokens != 42 || failed {
-		t.Errorf("extractCompletion = %q, %d, %v; want done, 42, false", text, tokens, failed)
+	p := Provider{Output: "json", ResultPath: "result", TokensPath: "usage.output_tokens",
+		InTokensPath: "usage.input_tokens"}
+	text, tokens, in, failed := extractCompletion(p, []byte(`{"result":"done","usage":{"output_tokens":42,"input_tokens":7}}`))
+	if text != "done" || tokens != 42 || in != 7 || failed {
+		t.Errorf("extractCompletion = %q, %d, %d, %v; want done, 42, 7, false", text, tokens, in, failed)
 	}
 	// Non-JSON output falls back to raw text.
 	pt := Provider{Output: "text"}
-	if txt, _, _ := extractCompletion(pt, []byte("plain answer")); txt != "plain answer" {
+	if txt, _, _, _ := extractCompletion(pt, []byte("plain answer")); txt != "plain answer" {
 		t.Errorf("text extract = %q", txt)
 	}
 	// error_path truthy → failed, so the caller can fail over.
 	pe := Provider{Output: "json", ResultPath: "result", ErrorPath: "is_error"}
-	if _, _, failed := extractCompletion(pe, []byte(`{"is_error":true,"result":"Not logged in"}`)); !failed {
+	if _, _, _, failed := extractCompletion(pe, []byte(`{"is_error":true,"result":"Not logged in"}`)); !failed {
 		t.Error("expected failed=true when is_error is set")
 	}
 }
 
 func TestSynthSSEParsesAsOpenAI(t *testing.T) {
-	out := string(synthSSE("hello world", 12))
+	out := string(synthSSE("some-model", "hello world", 4, 12))
 	if !strings.Contains(out, `"content":"hello world"`) {
 		t.Errorf("missing content delta: %q", out)
 	}
-	if !strings.Contains(out, `"total_tokens":12`) {
+	if !strings.Contains(out, `"total_tokens":16`) || !strings.Contains(out, `"prompt_tokens":4`) {
 		t.Errorf("missing usage: %q", out)
+	}
+	// The model must be on the chunks: /v1/messages reads it back as the
+	// Anthropic response's "model", which was empty for CLI-served replies.
+	if !strings.Contains(out, `"model":"some-model"`) {
+		t.Errorf("missing model: %q", out)
 	}
 	if !strings.HasSuffix(strings.TrimSpace(out), "data: [DONE]") {
 		t.Errorf("missing terminator: %q", out)
@@ -62,8 +68,8 @@ func TestSynthSSEParsesAsOpenAI(t *testing.T) {
 			got = t
 		}
 	}
-	if got != 12 {
-		t.Errorf("usageTokens round-trip = %d, want 12", got)
+	if got != 16 {
+		t.Errorf("usageTokens round-trip = %d, want 16", got)
 	}
 }
 
@@ -193,8 +199,58 @@ func TestRunCLIFailureFailsOver(t *testing.T) {
 	}
 }
 
+// TestToolsSkipCLIProviders pins the fix for a request that carries tool
+// definitions: a CLI provider answers it with the call narrated in prose, which
+// an agent reads as "did nothing". It must be routed past, and the request must
+// fail loudly when no other provider can take it.
+func TestToolsSkipCLIProviders(t *testing.T) {
+	working := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer working.Close()
+
+	cli := Provider{Name: "cli", Kind: "cli", Command: "sh", Args: []string{"-c", "printf narrated"}, Models: []string{"m"}}
+	payload := func() map[string]any {
+		return map[string]any{
+			"messages": []any{map[string]any{"role": "user", "content": "hi"}},
+			"tools":    []any{map[string]any{"type": "function"}},
+		}
+	}
+
+	// The CLI provider is first in config order, so plain rotation would pick it.
+	rot := NewRotator([]Provider{cli, {Name: "http", BaseURL: working.URL, APIKey: "k", Models: []string{"m"}}}, nil)
+	res, err := rot.dispatch(context.Background(), "chicco:auto", payload(), "/chat/completions")
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	res.up.body.Close()
+	if res.provider != "http" {
+		t.Errorf("tools request served by %q, want the HTTP provider", res.provider)
+	}
+
+	// Nothing but CLI providers: a 503 saying why beats a narrated non-answer.
+	only := NewRotator([]Provider{cli}, nil)
+	_, err = only.dispatch(context.Background(), "chicco:auto", payload(), "/chat/completions")
+	if err == nil {
+		t.Fatal("CLI-only tools request succeeded, want 503")
+	}
+	if got := dispatchStatus(err); got != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", got)
+	}
+	if !strings.Contains(err.Error(), "tools") {
+		t.Errorf("error does not explain the tools gap: %v", err)
+	}
+}
+
 func TestProbeCLI(t *testing.T) {
 	ctx := context.Background()
+	// A CLI that isn't installed here is down, not healthy: it used to probe
+	// green off its mounted credential file and only fail at request time.
+	notInstalled := Provider{Kind: "cli", Command: "chicco-no-such-cli", Credential: "/"}
+	if got, _ := probeCLI(ctx, notInstalled); got != HealthDown {
+		t.Errorf("missing binary = %v, want HealthDown", got)
+	}
 	if got, _ := probeCLI(ctx, Provider{Kind: "cli", HealthCommand: []string{"true"}}); got != HealthOK {
 		t.Errorf("health_command true = %v, want HealthOK", got)
 	}
@@ -237,6 +293,27 @@ func TestCLIFailureClassifies(t *testing.T) {
 	// Limit with no parseable time falls back to the default window cooldown.
 	if up := cliFailure("You have reached your usage limit."); up.retryAfter != rateLimitCooldown {
 		t.Errorf("fallback cooldown = %v, want %v", up.retryAfter, rateLimitCooldown)
+	}
+}
+
+// TestCLIFailureKeepsTheReason uses gemini-cli's real output: a warning line
+// first, then a long stack trace, with the actual cause ("Error authenticating")
+// in the middle and repeated at the end. Reported head-first and capped at 512
+// bytes, all the caller ever saw was the harmless warning — and the auth error,
+// which names no login, classified as a transient 502 and was retried every
+// minute forever instead of greying the provider out.
+func TestCLIFailureKeepsTheReason(t *testing.T) {
+	msg := "Approval mode overridden by --approval-mode plan\n" +
+		strings.Repeat("    at throwIneligibleOrProjectIdError (file:///home/x/bundle/chunk.js:310030:11)\n", 12) +
+		"An unexpected critical error occurred: IneligibleTierError: This client is no longer supported"
+
+	up := cliFailure(msg)
+	if up.status != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 (auth → grey, long cooldown)", up.status)
+	}
+	body, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
+	if !strings.Contains(string(body), "no longer supported") {
+		t.Errorf("reported body lost the reason it failed: %q", body)
 	}
 }
 

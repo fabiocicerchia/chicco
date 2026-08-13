@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -184,6 +185,51 @@ func TestModelsEndpoint(t *testing.T) {
 	}
 }
 
+// TestModelsEndpointHidesDeadModels confirms /v1/models drops a virtual model
+// whose every backend is greyed out (bad key, logged-out or missing CLI,
+// unreachable endpoint) — listing it only gets a caller to pick it and take a
+// 503 — while a model with one live backend, and one merely in cooldown (a rate
+// limit that reopens on its own), both stay listed.
+func TestModelsEndpointHidesDeadModels(t *testing.T) {
+	rot := NewRotator([]Provider{
+		{Name: "live", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}},
+		{Name: "dead", BaseURL: "http://y", APIKey: "k", Models: []string{"m"}},
+		{Name: "nokey", BaseURL: "http://z", APIKey: "k", Models: []string{"m"}},
+	}, []Model{
+		{ID: "mixed", Backends: []Backend{{Provider: "dead", Model: "m"}, {Provider: "live", Model: "m"}}},
+		{ID: "gone", Backends: []Backend{{Provider: "dead", Model: "m"}}},
+		{ID: "limited", Backends: []Backend{{Provider: "nokey", Model: "m"}}},
+	})
+	rot.setHealth("live", HealthOK)
+	rot.setHealth("dead", HealthDown)
+	rot.setHealth("nokey", HealthOK)
+	rot.block("nokey", time.Minute, "rate")
+
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/v1/models")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	var got []string
+	for _, d := range out.Data {
+		got = append(got, d.ID)
+	}
+	want := []string{"chicco:auto", "mixed", "limited"}
+	if !slices.Equal(got, want) {
+		t.Errorf("models = %v, want %v", got, want)
+	}
+}
+
 // TestInboundAuth confirms the optional shared secret guards every endpoint
 // except /health, and constant-time-compares the presented bearer token.
 func TestInboundAuth(t *testing.T) {
@@ -229,6 +275,54 @@ func TestInboundAuth(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("open /v1/models = %d, want 200", resp.StatusCode)
+	}
+}
+
+// TestHealthBody confirms /health names each provider's state instead of
+// answering an empty 200, which reported a provider whose key is rejected as
+// indistinguishable from a working one. The status stays 200 either way — the
+// chart uses this path for liveness.
+func TestHealthBody(t *testing.T) {
+	rot := NewRotator([]Provider{
+		{Name: "good", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}},
+		{Name: "bad", BaseURL: "http://y", APIKey: "k", Models: []string{"m"}},
+	}, nil)
+	rot.setHealth("good", HealthOK)
+	rot.setHealth("bad", HealthAuth)
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var out struct {
+		Status    string            `json:"status"`
+		Providers map[string]string `json:"providers"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.Status != "ok" || out.Providers["good"] != "ok" || out.Providers["bad"] != "auth" {
+		t.Errorf("/health = %+v, want status ok with good=ok bad=auth", out)
+	}
+
+	// Every provider unusable → still 200, but the body says degraded.
+	rot.setHealth("good", HealthDown)
+	resp2, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp2.Body.Close()
+	if err := json.NewDecoder(resp2.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp2.StatusCode != http.StatusOK || out.Status != "degraded" {
+		t.Errorf("all-down /health = %d %+v, want 200 degraded", resp2.StatusCode, out)
 	}
 }
 
