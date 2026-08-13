@@ -16,11 +16,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  actions: read
+  contents: read
 
 jobs:
   badge:
+    permissions:
+      contents: write
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - name: Any activity in the past week?
