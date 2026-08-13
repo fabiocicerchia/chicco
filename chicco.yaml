@@ -74,6 +74,7 @@ providers:
   #   output: json
   #   result_path: result
   #   tokens_path: usage.output_tokens
+  #   input_tokens_path: usage.input_tokens   # real prompt count, else chicco estimates
   #   error_path: is_error          # claude sets is_error on a logged-out/failed call
   #   health_command: ["claude", "auth", "status"]   # real login check, no inference
   #   health_expect: '"loggedIn": true'              # grey if output lacks this

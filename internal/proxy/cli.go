@@ -204,7 +204,7 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 	if p.OutputFile {
 		raw, _ = os.ReadFile(outFile)
 	}
-	text, tokens, failed := extractCompletion(p, raw)
+	text, tokens, promptTokens, failed := extractCompletion(p, raw)
 	if failed {
 		// The tool ran but reported an error in its output (e.g. claude's
 		// "is_error": true on a logged-out / rate-limited call). Treat it as a
@@ -219,6 +219,17 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 	if tokens == 0 {
 		tokens = int64(len(text) / 4) // ponytail: rough estimate when the CLI reports none
 	}
+	// Prompt tokens: exact when the tool reports them (input_tokens_path — claude
+	// and codex both print usage in --output-format json), else estimated.
+	//
+	// ponytail: 4 chars/token is the fallback, not the plan. Reporting 0
+	// input_tokens made every CLI-served reply look free to a caller doing cost
+	// accounting; an estimate is wrong by a few percent, 0 is wrong by the whole
+	// prompt. Exactness needs the model's own BPE vocab, which differs per model
+	// and isn't published for every one of them — configure the path instead.
+	if promptTokens == 0 {
+		promptTokens = int64(len(prompt) / 4)
+	}
 
 	// Answer in the shape the caller asked for. Synthesizing SSE unconditionally
 	// handed a `"stream": false` client `Content-Type: text/event-stream` and
@@ -228,14 +239,14 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 		return &upstream{
 			status:      http.StatusOK,
 			contentType: "application/json",
-			body:        io.NopCloser(bytes.NewReader(synthJSON(model, text, tokens))),
+			body:        io.NopCloser(bytes.NewReader(synthJSON(model, text, promptTokens, tokens))),
 		}, nil
 	}
 
 	return &upstream{
 		status:      http.StatusOK,
 		contentType: "text/event-stream",
-		body:        io.NopCloser(bytes.NewReader(synthSSE(text, tokens))),
+		body:        io.NopCloser(bytes.NewReader(synthSSE(model, text, promptTokens, tokens))),
 	}, nil
 }
 
@@ -260,25 +271,30 @@ func splitMessages(payload map[string]any) (system, user string) {
 	return system, strings.Join(turns, "\n\n")
 }
 
-// extractCompletion pulls the reply text (and any reported token count) out of a
+// extractCompletion pulls the reply text (and any reported token counts) out of a
 // CLI's raw output: a dotted path into a JSON object for Output=="json", else the
 // raw stdout verbatim. failed is true when ErrorPath is set and truthy in the JSON.
-func extractCompletion(p Provider, raw []byte) (text string, tokens int64, failed bool) {
+// inTokens is 0 unless the tool reports prompt usage at InTokensPath, which the
+// caller then prefers over its own estimate.
+func extractCompletion(p Provider, raw []byte) (text string, tokens, inTokens int64, failed bool) {
 	if p.Output != "json" {
-		return string(raw), 0, false
+		return string(raw), 0, 0, false
 	}
 	var m map[string]any
 	if err := json.Unmarshal(bytes.TrimSpace(raw), &m); err != nil {
-		return string(raw), 0, false // not JSON after all — fall back to raw
+		return string(raw), 0, 0, false // not JSON after all — fall back to raw
 	}
 	text = asString(dotGet(m, p.ResultPath))
 	if p.ErrorPath != "" && truthy(dotGet(m, p.ErrorPath)) {
-		return text, 0, true
+		return text, 0, 0, true
 	}
 	if p.TokensPath != "" {
 		tokens = asInt64(dotGet(m, p.TokensPath))
 	}
-	return text, tokens, false
+	if p.InTokensPath != "" {
+		inTokens = asInt64(dotGet(m, p.InTokensPath))
+	}
+	return text, tokens, inTokens, false
 }
 
 // truthy reports whether a decoded JSON value signals "yes/error": a true bool, a
@@ -340,9 +356,9 @@ func asInt64(v any) int64 {
 // for callers that sent "stream": false. Carries the fields strict clients
 // require (id/object/created/model/finish_reason) rather than the bare choices
 // array the SSE path gets away with.
-func synthJSON(model, text string, tokens int64) []byte {
+func synthJSON(model, text string, promptTokens, tokens int64) []byte {
 	out, _ := json.Marshal(map[string]any{
-		"id":      "chatcmpl-chicco-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		"id":      synthID(),
 		"object":  "chat.completion",
 		"created": time.Now().Unix(),
 		"model":   model,
@@ -351,17 +367,25 @@ func synthJSON(model, text string, tokens int64) []byte {
 			"message":       map[string]any{"role": "assistant", "content": text},
 			"finish_reason": "stop",
 		}},
-		"usage": map[string]any{"total_tokens": tokens},
+		"usage": synthUsage(promptTokens, tokens),
 	})
 	return out
 }
 
 // synthSSE renders a completion as the minimal OpenAI SSE stream a client accepts:
 // one content delta, an optional usage chunk (for the dashboard bar), and [DONE].
-func synthSSE(text string, tokens int64) []byte {
+// Every chunk carries id/model because they are what a caller reads back to tell
+// WHICH provider served it — /v1/messages relays them as the Anthropic response's
+// id and model, which were empty for CLI-served replies while these were omitted.
+func synthSSE(model, text string, promptTokens, tokens int64) []byte {
 	var b bytes.Buffer
+	id := synthID()
+	created := time.Now().Unix()
 	chunk, _ := json.Marshal(map[string]any{
-		"object": "chat.completion.chunk",
+		"id":      id,
+		"object":  "chat.completion.chunk",
+		"created": created,
+		"model":   model,
 		"choices": []any{map[string]any{
 			"index":         0,
 			"delta":         map[string]any{"role": "assistant", "content": text},
@@ -371,10 +395,14 @@ func synthSSE(text string, tokens int64) []byte {
 	b.WriteString("data: ")
 	b.Write(chunk)
 	b.WriteString("\n\n")
-	if tokens > 0 {
+	if tokens > 0 || promptTokens > 0 {
 		usage, _ := json.Marshal(map[string]any{
+			"id":      id,
+			"object":  "chat.completion.chunk",
+			"created": created,
+			"model":   model,
 			"choices": []any{},
-			"usage":   map[string]any{"total_tokens": tokens},
+			"usage":   synthUsage(promptTokens, tokens),
 		})
 		b.WriteString("data: ")
 		b.Write(usage)
@@ -382,4 +410,16 @@ func synthSSE(text string, tokens int64) []byte {
 	}
 	b.WriteString("data: [DONE]\n\n")
 	return b.Bytes()
+}
+
+func synthID() string {
+	return "chatcmpl-chicco-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+}
+
+func synthUsage(promptTokens, tokens int64) map[string]any {
+	return map[string]any{
+		"prompt_tokens":     promptTokens,
+		"completion_tokens": tokens,
+		"total_tokens":      promptTokens + tokens,
+	}
 }

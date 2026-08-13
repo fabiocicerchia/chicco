@@ -144,20 +144,21 @@ type Provider struct {
 	// Ignored by the other strategies.
 	Weight int `yaml:"weight"`
 
-	Kind          string   `yaml:"kind"`            // "" / "http" (default) | "cli"
-	Command       string   `yaml:"command"`         // tool to run, e.g. "claude"
-	Args          []string `yaml:"args"`            // templated argv
-	PromptStdin   bool     `yaml:"prompt_stdin"`    // pipe {{prompt}} on stdin instead of an arg
-	OutputFile    bool     `yaml:"output_file"`     // read completion from the {{output_file}} temp path
-	Output        string   `yaml:"output"`          // "text" (default) | "json"
-	ResultPath    string   `yaml:"result_path"`     // dotted path to text when Output=="json"
-	TokensPath    string   `yaml:"tokens_path"`     // optional dotted path to a token count
-	ErrorPath     string   `yaml:"error_path"`      // optional dotted path; if truthy the call failed (fail over)
-	StripANSI     bool     `yaml:"strip_ansi"`      // strip ANSI escapes from output (kiro)
-	HealthCommand []string `yaml:"health_command"`  // run for health; exit 0 (and HealthExpect, if set) = healthy
-	HealthExpect  string   `yaml:"health_expect"`   // require this substring in HealthCommand output, else HealthAuth (logged out)
-	Credential    string   `yaml:"credential"`      // optional file to stat for health (use ${HOME}/…)
-	TimeoutSecs   int      `yaml:"timeout_seconds"` // CLI run timeout (default 120)
+	Kind          string   `yaml:"kind"`              // "" / "http" (default) | "cli"
+	Command       string   `yaml:"command"`           // tool to run, e.g. "claude"
+	Args          []string `yaml:"args"`              // templated argv
+	PromptStdin   bool     `yaml:"prompt_stdin"`      // pipe {{prompt}} on stdin instead of an arg
+	OutputFile    bool     `yaml:"output_file"`       // read completion from the {{output_file}} temp path
+	Output        string   `yaml:"output"`            // "text" (default) | "json"
+	ResultPath    string   `yaml:"result_path"`       // dotted path to text when Output=="json"
+	TokensPath    string   `yaml:"tokens_path"`       // optional dotted path to the completion token count
+	InTokensPath  string   `yaml:"input_tokens_path"` // optional dotted path to the prompt token count (else estimated)
+	ErrorPath     string   `yaml:"error_path"`        // optional dotted path; if truthy the call failed (fail over)
+	StripANSI     bool     `yaml:"strip_ansi"`        // strip ANSI escapes from output (kiro)
+	HealthCommand []string `yaml:"health_command"`    // run for health; exit 0 (and HealthExpect, if set) = healthy
+	HealthExpect  string   `yaml:"health_expect"`     // require this substring in HealthCommand output, else HealthAuth (logged out)
+	Credential    string   `yaml:"credential"`        // optional file to stat for health (use ${HOME}/…)
+	TimeoutSecs   int      `yaml:"timeout_seconds"`   // CLI run timeout (default 120)
 }
 
 // effectiveQuota derives the dashboard bar parameters from the quota fields.

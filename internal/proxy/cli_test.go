@@ -27,30 +27,36 @@ func TestSplitMessages(t *testing.T) {
 }
 
 func TestDotGetAndExtract(t *testing.T) {
-	p := Provider{Output: "json", ResultPath: "result", TokensPath: "usage.output_tokens"}
-	text, tokens, failed := extractCompletion(p, []byte(`{"result":"done","usage":{"output_tokens":42}}`))
-	if text != "done" || tokens != 42 || failed {
-		t.Errorf("extractCompletion = %q, %d, %v; want done, 42, false", text, tokens, failed)
+	p := Provider{Output: "json", ResultPath: "result", TokensPath: "usage.output_tokens",
+		InTokensPath: "usage.input_tokens"}
+	text, tokens, in, failed := extractCompletion(p, []byte(`{"result":"done","usage":{"output_tokens":42,"input_tokens":7}}`))
+	if text != "done" || tokens != 42 || in != 7 || failed {
+		t.Errorf("extractCompletion = %q, %d, %d, %v; want done, 42, 7, false", text, tokens, in, failed)
 	}
 	// Non-JSON output falls back to raw text.
 	pt := Provider{Output: "text"}
-	if txt, _, _ := extractCompletion(pt, []byte("plain answer")); txt != "plain answer" {
+	if txt, _, _, _ := extractCompletion(pt, []byte("plain answer")); txt != "plain answer" {
 		t.Errorf("text extract = %q", txt)
 	}
 	// error_path truthy → failed, so the caller can fail over.
 	pe := Provider{Output: "json", ResultPath: "result", ErrorPath: "is_error"}
-	if _, _, failed := extractCompletion(pe, []byte(`{"is_error":true,"result":"Not logged in"}`)); !failed {
+	if _, _, _, failed := extractCompletion(pe, []byte(`{"is_error":true,"result":"Not logged in"}`)); !failed {
 		t.Error("expected failed=true when is_error is set")
 	}
 }
 
 func TestSynthSSEParsesAsOpenAI(t *testing.T) {
-	out := string(synthSSE("hello world", 12))
+	out := string(synthSSE("some-model", "hello world", 4, 12))
 	if !strings.Contains(out, `"content":"hello world"`) {
 		t.Errorf("missing content delta: %q", out)
 	}
-	if !strings.Contains(out, `"total_tokens":12`) {
+	if !strings.Contains(out, `"total_tokens":16`) || !strings.Contains(out, `"prompt_tokens":4`) {
 		t.Errorf("missing usage: %q", out)
+	}
+	// The model must be on the chunks: /v1/messages reads it back as the
+	// Anthropic response's "model", which was empty for CLI-served replies.
+	if !strings.Contains(out, `"model":"some-model"`) {
+		t.Errorf("missing model: %q", out)
 	}
 	if !strings.HasSuffix(strings.TrimSpace(out), "data: [DONE]") {
 		t.Errorf("missing terminator: %q", out)
@@ -62,8 +68,8 @@ func TestSynthSSEParsesAsOpenAI(t *testing.T) {
 			got = t
 		}
 	}
-	if got != 12 {
-		t.Errorf("usageTokens round-trip = %d, want 12", got)
+	if got != 16 {
+		t.Errorf("usageTokens round-trip = %d, want 16", got)
 	}
 }
 
