@@ -291,14 +291,43 @@ func (r *Rotator) DailyTotals() (requests int, tokens int64, activeProviders int
 	return
 }
 
-// VirtualModelIDs returns the IDs of all virtual models defined in the routing
-// table, in config order. Used by the /v1/models handler.
+// VirtualModelIDs returns the IDs of the virtual models a request could actually
+// be served by, in config order. A model every one of whose backends is greyed
+// out — key rejected, tool logged out, CLI binary not installed, endpoint
+// unreachable — is left out: listing it only gets a caller to pick it and take a
+// 502/503, since nothing in the listing said it was dead. Cooldown is NOT a
+// reason to hide a model: that's a rate limit which reopens on its own, and the
+// entry would flap in and out of the list.
+//
+// Used by the /v1/models handler.
 func (r *Rotator) VirtualModelIDs() []string {
-	ids := make([]string, len(r.models))
-	for i, m := range r.models {
-		ids[i] = m.ID
+	ids := make([]string, 0, len(r.models))
+	for _, m := range r.models {
+		if r.servable(m.ID) {
+			ids = append(ids, m.ID)
+		}
 	}
 	return ids
+}
+
+// servable reports whether any provider backing a virtual model is currently in
+// a state that could answer. A provider never probed (HealthUnknown) counts as
+// servable — unproven is not the same as broken — and a model with no candidate
+// providers at all is left alone: that's a config gap, not a probe result, and
+// hiding it would just make a mistyped backend name look like an outage.
+func (r *Rotator) servable(id string) bool {
+	providers, _ := r.activeForModel(id)
+	if len(providers) == 0 {
+		return true
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, p := range providers {
+		if h := r.health[p.Name]; h != HealthDown && h != HealthAuth {
+			return true
+		}
+	}
+	return false
 }
 
 // activeForModel returns the subset of active providers that back a named virtual
@@ -652,7 +681,7 @@ func parseRetryAfter(h string) time.Duration {
 // log history) — the status endpoint returns an empty log array then.
 func Handler(r *Rotator, logs *logBuffer) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("/health", r.handleHealth)
 	mux.HandleFunc("/v1/models", r.handleModels)
 	mux.HandleFunc("/v1/chat/completions", r.handleChat)
 	mux.HandleFunc("/v1/embeddings", r.handleEmbeddings)
@@ -698,6 +727,52 @@ func bearerMatches(header, key string) bool {
 	return subtle.ConstantTimeCompare([]byte(got), []byte(key)) == 1
 }
 
+// healthStr renders a Health for the JSON APIs (/health, /v1/status) and the
+// dashboard, which colour on these four strings.
+func healthStr(h Health) string {
+	switch h {
+	case HealthOK:
+		return "ok"
+	case HealthAuth:
+		return "auth"
+	case HealthDown:
+		return "down"
+	default:
+		return "unknown"
+	}
+}
+
+// handleHealth serves GET /health. The status stays 200 whatever the providers
+// are doing — the Helm chart points both the liveness AND the readiness probe
+// here, so failing it on a provider outage would restart a proxy that is running
+// perfectly well. The body is what changed: an empty 200 said nothing about
+// whether anything could actually serve a request, so a provider whose CLI isn't
+// installed or whose key is rejected looked exactly as healthy as a working one.
+// "degraded" means every provider is greyed out or in cooldown right now.
+func (r *Rotator) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	providers := map[string]string{}
+	ready := 0
+	for _, s := range r.Snapshot() {
+		if s.Inactive {
+			continue
+		}
+		state := healthStr(s.Health)
+		if s.CooldownLeft > 0 {
+			state = "cooldown"
+		}
+		providers[s.Name] = state
+		if state == "ok" || state == "unknown" { // unknown = not probed yet, still routable
+			ready++
+		}
+	}
+	status := "ok"
+	if ready == 0 {
+		status = "degraded"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "providers": providers})
+}
+
 // handleStatus returns a handler that serves GET /v1/status as JSON containing
 // the current provider snapshot and the most recent log lines. It is the data
 // source polled by the web dashboard.
@@ -729,19 +804,6 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 			CooldownKind  string          `json:"cooldown_kind"`
 			Health        string          `json:"health"` // "ok" | "auth" | "down" | "unknown"
 			Inactive      bool            `json:"inactive"`
-		}
-
-		healthStr := func(h Health) string {
-			switch h {
-			case HealthOK:
-				return "ok"
-			case HealthAuth:
-				return "auth"
-			case HealthDown:
-				return "down"
-			default:
-				return "unknown"
-			}
 		}
 
 		stats := r.Snapshot()
