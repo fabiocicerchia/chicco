@@ -80,6 +80,14 @@ text. The presets do this where the tool allows it (claude `--bare --tools ""`,
 codex `--sandbox read-only`, qwen plain `-p`); kiro has no clean answer-only mode,
 so it's the least suitable here.
 
+**A CLI provider is only as available as its binary.** The tool has to be
+installed wherever chicco runs — the Docker image ships none of them, so a CLI
+provider configured there is dead until the binary (and its login) are mounted
+in. The health probe checks the command exists before anything else and marks the
+provider **down** when it doesn't, so this shows on the dashboard and in
+`/health` rather than surfacing as a `502 no such file or directory` on the first
+real request.
+
 ## CLI-backed providers (`kind: cli`)
 
 A provider can run a **local CLI tool** (claude, codex, kiro, a qwen CLI, …) instead

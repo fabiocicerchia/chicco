@@ -245,6 +245,12 @@ func TestToolsSkipCLIProviders(t *testing.T) {
 
 func TestProbeCLI(t *testing.T) {
 	ctx := context.Background()
+	// A CLI that isn't installed here is down, not healthy: it used to probe
+	// green off its mounted credential file and only fail at request time.
+	notInstalled := Provider{Kind: "cli", Command: "chicco-no-such-cli", Credential: "/"}
+	if got, _ := probeCLI(ctx, notInstalled); got != HealthDown {
+		t.Errorf("missing binary = %v, want HealthDown", got)
+	}
 	if got, _ := probeCLI(ctx, Provider{Kind: "cli", HealthCommand: []string{"true"}}); got != HealthOK {
 		t.Errorf("health_command true = %v, want HealthOK", got)
 	}
