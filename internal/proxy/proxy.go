@@ -963,8 +963,22 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 	if upstreamPath == "/embeddings" {
 		active = slices.DeleteFunc(active, func(p Provider) bool { return p.Kind == "cli" })
 	}
+	// Same for function-calling: a CLI provider is handed the conversation as one
+	// plain-text prompt and answers with plain text, so a request carrying tool
+	// definitions comes back with the call narrated in prose (often pseudo-XML)
+	// and finish_reason "stop" — indistinguishable from a refusal to any agent,
+	// which then reports "no changes made". Drop them rather than serve that.
+	wantsTools := false
+	if tl, ok := payload["tools"].([]any); ok && len(tl) > 0 {
+		wantsTools = true
+		active = slices.DeleteFunc(active, func(p Provider) bool { return p.Kind == "cli" })
+	}
 	if len(active) == 0 {
-		return nil, &dispatchError{http.StatusServiceUnavailable, "chicco: no providers configured with an API key and models"}
+		msg := "chicco: no providers configured with an API key and models"
+		if wantsTools {
+			msg = "chicco: request sends 'tools' but every provider for this model is CLI-backed; CLI providers return plain text and cannot emit tool calls"
+		}
+		return nil, &dispatchError{http.StatusServiceUnavailable, msg}
 	}
 
 	var lastErr string
@@ -986,12 +1000,6 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		// the same `upstream` so the rest of the loop is identical.
 		var up *upstream
 		if p.Kind == "cli" {
-			// CLI providers return plain text — OpenAI function-calling isn't
-			// supported. Warn if the caller sent tool definitions so the gap isn't
-			// silent (agents that apply their own edits from the text never send them).
-			if tl, ok := payload["tools"].([]any); ok && len(tl) > 0 {
-				log.Printf("chicco: %s is a CLI provider — request 'tools' (function-calling) is ignored; it returns plain text", p.Name)
-			}
 			up, err = runCLI(ctx, p, model, payload)
 		} else {
 			up, err = forward(ctx, p, upstreamBody, upstreamPath)

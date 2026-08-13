@@ -59,10 +59,18 @@ auth and greys it (see above).
 
 **Tools are text-in / text-out — keep the CLI's own tools off.** chicco flattens
 the request to one prompt and reads back plain text; it does not support OpenAI
-function-calling (a `tools` array in the request is ignored, with a logged warning).
-More importantly, run each CLI in a **no-tools / read-only** mode so it can't edit
-files or run commands on the host — any edits would land in chicco's working
-directory, and the calling agent expects to apply edits itself from the returned
+function-calling. A request carrying a `tools` array is therefore **routed past
+every CLI provider**, and gets a `503` naming the reason if only CLI providers
+back the requested model. That is deliberate: served by a CLI, the model writes
+the call out as prose (often pseudo-XML) with `finish_reason: "stop"`, and a
+caller like Claude Code or opencode reads that as "the model chose not to act"
+and reports no changes. A loud failure beats a silent non-answer — point
+tool-using agents at an HTTP provider.
+
+More importantly, run each CLI in a **no-tools / read-only** mode so it can't
+edit files or run commands on the host — any edits would land in chicco's own
+working directory (in Docker, inside the container), *not* in the caller's
+worktree, and the calling agent expects to apply edits itself from the returned
 text. The presets do this where the tool allows it (claude `--bare --tools ""`,
 codex `--sandbox read-only`, qwen plain `-p`); kiro has no clean answer-only mode,
 so it's the least suitable here.

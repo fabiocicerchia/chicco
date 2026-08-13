@@ -193,6 +193,50 @@ func TestRunCLIFailureFailsOver(t *testing.T) {
 	}
 }
 
+// TestToolsSkipCLIProviders pins the fix for a request that carries tool
+// definitions: a CLI provider answers it with the call narrated in prose, which
+// an agent reads as "did nothing". It must be routed past, and the request must
+// fail loudly when no other provider can take it.
+func TestToolsSkipCLIProviders(t *testing.T) {
+	working := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer working.Close()
+
+	cli := Provider{Name: "cli", Kind: "cli", Command: "sh", Args: []string{"-c", "printf narrated"}, Models: []string{"m"}}
+	payload := func() map[string]any {
+		return map[string]any{
+			"messages": []any{map[string]any{"role": "user", "content": "hi"}},
+			"tools":    []any{map[string]any{"type": "function"}},
+		}
+	}
+
+	// The CLI provider is first in config order, so plain rotation would pick it.
+	rot := NewRotator([]Provider{cli, {Name: "http", BaseURL: working.URL, APIKey: "k", Models: []string{"m"}}}, nil)
+	res, err := rot.dispatch(context.Background(), "chicco:auto", payload(), "/chat/completions")
+	if err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	res.up.body.Close()
+	if res.provider != "http" {
+		t.Errorf("tools request served by %q, want the HTTP provider", res.provider)
+	}
+
+	// Nothing but CLI providers: a 503 saying why beats a narrated non-answer.
+	only := NewRotator([]Provider{cli}, nil)
+	_, err = only.dispatch(context.Background(), "chicco:auto", payload(), "/chat/completions")
+	if err == nil {
+		t.Fatal("CLI-only tools request succeeded, want 503")
+	}
+	if got := dispatchStatus(err); got != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", got)
+	}
+	if !strings.Contains(err.Error(), "tools") {
+		t.Errorf("error does not explain the tools gap: %v", err)
+	}
+}
+
 func TestProbeCLI(t *testing.T) {
 	ctx := context.Background()
 	if got, _ := probeCLI(ctx, Provider{Kind: "cli", HealthCommand: []string{"true"}}); got != HealthOK {
