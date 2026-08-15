@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 
 	"gopkg.in/yaml.v3"
@@ -31,16 +32,21 @@ type Config struct {
 	// have, since its whole point is to drain one provider's quota and fall
 	// through to the next. Zero value (the default) means no aggregate cap.
 	Quota Quota `yaml:"quota"`
+	// Aliases map a caller-facing name onto a virtual model id, so a client can
+	// ask for "fast" and the routing table decides what that means today.
+	// Changing a backend then means editing chicco.yaml, not every caller.
+	Aliases map[string]string `yaml:"aliases"`
 }
 
 // rawConfig is the intermediate shape used during YAML decoding. providers is
 // kept as a raw yaml.Node so we can detect list vs. map and preserve order.
 type rawConfig struct {
-	Addr      string    `yaml:"addr"`
-	APIKey    string    `yaml:"api_key"`
-	Providers yaml.Node `yaml:"providers"`
-	Models    []Model   `yaml:"models"`
-	Quota     Quota     `yaml:"quota"`
+	Addr      string            `yaml:"addr"`
+	APIKey    string            `yaml:"api_key"`
+	Providers yaml.Node         `yaml:"providers"`
+	Models    []Model           `yaml:"models"`
+	Quota     Quota             `yaml:"quota"`
+	Aliases   map[string]string `yaml:"aliases"`
 }
 
 // UnmarshalYAML lets Config accept providers as either a YAML sequence (list
@@ -56,6 +62,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.APIKey = raw.APIKey
 	c.Models = raw.Models
 	c.Quota = raw.Quota
+	c.Aliases = raw.Aliases
 
 	n := &raw.Providers
 	// Unwrap a document node if present.
@@ -267,6 +274,10 @@ func LoadConfig(path string) (Config, error) {
 	// (which requires at least one model per active provider) works unchanged.
 	resolveModels(&c)
 
+	if err := validateAliases(&c); err != nil {
+		return Config{}, fmt.Errorf("parsing %s: %w", path, err)
+	}
+
 	c.APIKey = os.ExpandEnv(c.APIKey)
 	// Expand ${VAR} in keys, CLI command/credential, and argv. Placeholders use
 	// {{double braces}}, so ExpandEnv leaves them untouched.
@@ -416,4 +427,41 @@ func (c Config) Validate() []string {
 		problems = append(problems, "warning: no active providers (none have both models and, for http, an api_key)")
 	}
 	return problems
+}
+
+// validateAliases refuses an alias pointing at nothing.
+//
+// Caught at load rather than at request time on purpose: an alias that
+// silently falls through to full rotation is the failure the issue exists to
+// remove — the caller asked for a specific routing policy and would get an
+// arbitrary one, with nothing in the logs saying so. A typo in chicco.yaml
+// should stop the proxy starting, the same way a bad addr does.
+func validateAliases(c *Config) error {
+	if len(c.Aliases) == 0 {
+		return nil
+	}
+	known := make(map[string]bool, len(c.Models)+1)
+	known["chicco:auto"] = true
+	for _, m := range c.Models {
+		known[m.ID] = true
+	}
+	names := make([]string, 0, len(c.Aliases))
+	for name := range c.Aliases {
+		names = append(names, name)
+	}
+	sort.Strings(names) // deterministic message when several are wrong
+	for _, name := range names {
+		target := c.Aliases[name]
+		switch {
+		case target == "":
+			return fmt.Errorf("alias %q has no target", name)
+		case known[name]:
+			// Shadowing a real model id would make routing depend on lookup
+			// order, which is not something to leave to chance.
+			return fmt.Errorf("alias %q has the same name as a model", name)
+		case !known[target]:
+			return fmt.Errorf("alias %q points at %q, which is not a model in this config", name, target)
+		}
+	}
+	return nil
 }

@@ -166,3 +166,13 @@ models:
     backends:
       - provider: cerebras
         model: zai-glm-4.7
+
+# aliases: (optional) caller-facing names for the virtual models above, so a
+# client can ask for "fast" and this file decides what that means today.
+# Changing a backend then means editing here, not every caller. An alias must
+# point at a model id in this file — a typo stops chicco starting rather than
+# silently routing across everything. Reloaded on SIGHUP, and listed on
+# /v1/models so clients can discover them.
+# aliases:
+#   fast: llama-3.3-70b
+#   smart: glm-4.7
