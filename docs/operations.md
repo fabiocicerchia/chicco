@@ -65,6 +65,34 @@ binds no port, so it's safe in CI or a pre-commit hook.
 
 `chicco -help` prints full usage.
 
+## Metrics
+
+Off by default. Enabled, chicco serves a Prometheus exposition on **its own
+listener** — the proxy port is what an agent runner points at, and a scrape
+target is a different audience:
+
+```yaml
+metrics:
+  enabled: true
+  addr: "127.0.0.1:41987"   # default when omitted
+```
+
+```
+chicco_requests_total{provider,model}          successful upstream calls
+chicco_tokens_total{provider,model}            tokens as reported upstream
+chicco_upstream_errors_total{provider,status}  failures; status="transport" when there was none
+chicco_provider_blocks_total{provider,reason}  cooldowns entered: limit | auth | error
+chicco_upstream_latency_seconds{provider}      histogram, successful calls and failures alike
+chicco_providers_blocked                       gauge: providers in cooldown right now
+```
+
+Labels are bounded by the config — provider names, model ids, and a fixed set of
+reasons and statuses. Nothing request-derived is ever a label, so a caller cannot
+grow the series count, and no prompt or key can reach the scrape target.
+
+The endpoint has no auth of its own, for the same reason `/health` has none:
+bind it where only the scraper can reach it. The default address is loopback.
+
 ## Reloading the config (SIGHUP)
 
 Edit `chicco.yaml` — rotate a key, add or remove a provider, change a model's
