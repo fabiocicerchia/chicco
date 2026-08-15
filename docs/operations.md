@@ -65,6 +65,37 @@ binds no port, so it's safe in CI or a pre-commit hook.
 
 `chicco -help` prints full usage.
 
+## Budget alerts
+
+Quota exhaustion is otherwise discovered when requests start failing. In
+chicco that failure is quiet by design — the rotation moves on — which is also
+how a whole pool of free tiers disappears over an afternoon with nothing said
+until the last one goes.
+
+```yaml
+alerts:
+  threshold_percent: 80
+  webhook: https://hooks.example.com/chicco   # optional
+  webhook_timeout: 5s
+```
+
+```
+chicco: groq at 82% of its daily quota (8200/10000 tokens) — threshold 80%
+```
+
+- **Once per crossing, not per request.** Firing per request emits hundreds of
+  lines for one event, which trains everyone to ignore them.
+- **Re-arms when the window rolls.** De-duplication and reset are the same
+  mechanism: an alert is remembered against the instant its window began, and a
+  new window has a different start. A daily quota that warned at 4pm can warn
+  again tomorrow; one with no window warns once for the process lifetime.
+- **The payload carries no request content** — provider, threshold, usage,
+  unit, window, timestamp. A webhook is an outbound call to a third party, and
+  the payload is the part that leaks if it is ever pointed at the wrong host.
+- **A failed webhook is logged, never returned.** The post runs in its own
+  goroutine off the request path, so a dead notification endpoint cannot fail
+  somebody's completion.
+
 ## Reloading the config (SIGHUP)
 
 Edit `chicco.yaml` — rotate a key, add or remove a provider, change a model's
