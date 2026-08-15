@@ -31,6 +31,9 @@ type Config struct {
 	// have, since its whole point is to drain one provider's quota and fall
 	// through to the next. Zero value (the default) means no aggregate cap.
 	Quota Quota `yaml:"quota"`
+	// Pricing turns the token counters into money. Optional: with no prices
+	// configured, every request reports as unpriced rather than as free.
+	Pricing Pricing `yaml:"pricing"`
 }
 
 // rawConfig is the intermediate shape used during YAML decoding. providers is
@@ -41,6 +44,7 @@ type rawConfig struct {
 	Providers yaml.Node `yaml:"providers"`
 	Models    []Model   `yaml:"models"`
 	Quota     Quota     `yaml:"quota"`
+	Pricing   Pricing   `yaml:"pricing"`
 }
 
 // UnmarshalYAML lets Config accept providers as either a YAML sequence (list
@@ -56,6 +60,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.APIKey = raw.APIKey
 	c.Models = raw.Models
 	c.Quota = raw.Quota
+	c.Pricing = raw.Pricing
 
 	n := &raw.Providers
 	// Unwrap a document node if present.
