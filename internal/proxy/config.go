@@ -31,16 +31,33 @@ type Config struct {
 	// have, since its whole point is to drain one provider's quota and fall
 	// through to the next. Zero value (the default) means no aggregate cap.
 	Quota Quota `yaml:"quota"`
+	// Metrics, when enabled, serves a Prometheus exposition on its own listener.
+	// Off by default and on a separate address on purpose: the proxy port is
+	// what an agent runner points at, and a scrape endpoint is a different
+	// audience with a different exposure.
+	Metrics MetricsConfig `yaml:"metrics"`
 }
+
+// MetricsConfig configures the Prometheus endpoint. Addr defaults to
+// 127.0.0.1:41987 — one above the proxy's own port, and loopback, because the
+// exposition has no auth of its own.
+type MetricsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Addr    string `yaml:"addr"`
+}
+
+// DefaultMetricsAddr is used when metrics are enabled with no addr set.
+const DefaultMetricsAddr = "127.0.0.1:41987"
 
 // rawConfig is the intermediate shape used during YAML decoding. providers is
 // kept as a raw yaml.Node so we can detect list vs. map and preserve order.
 type rawConfig struct {
-	Addr      string    `yaml:"addr"`
-	APIKey    string    `yaml:"api_key"`
-	Providers yaml.Node `yaml:"providers"`
-	Models    []Model   `yaml:"models"`
-	Quota     Quota     `yaml:"quota"`
+	Addr      string        `yaml:"addr"`
+	APIKey    string        `yaml:"api_key"`
+	Providers yaml.Node     `yaml:"providers"`
+	Models    []Model       `yaml:"models"`
+	Quota     Quota         `yaml:"quota"`
+	Metrics   MetricsConfig `yaml:"metrics"`
 }
 
 // UnmarshalYAML lets Config accept providers as either a YAML sequence (list
@@ -56,6 +73,10 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.APIKey = raw.APIKey
 	c.Models = raw.Models
 	c.Quota = raw.Quota
+	c.Metrics = raw.Metrics
+	if c.Metrics.Enabled && c.Metrics.Addr == "" {
+		c.Metrics.Addr = DefaultMetricsAddr
+	}
 
 	n := &raw.Providers
 	// Unwrap a document node if present.
