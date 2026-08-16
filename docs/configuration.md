@@ -88,3 +88,40 @@ api_key: ${CHICCO_API_KEY}   # inbound shared secret; ${VAR} expanded from env
 Every endpoint except `/health` (kept open for liveness probes) then requires
 `Authorization: Bearer <key>`; the token is compared in constant time. Point
 your OpenAI client at chicco with this key as its API key.
+
+## Aliases
+
+Callers otherwise hardcode provider-specific model ids, so changing a backend
+means changing every client. An alias is a name this file owns:
+
+```yaml
+models:
+  - id: llama-3.3-70b
+    strategy: order
+    backends:
+      - provider: cerebras
+        model: llama-3.3-70b
+      - provider: groq
+        model: llama-3.3-70b-versatile
+
+aliases:
+  fast: llama-3.3-70b
+```
+
+A request for `fast` routes exactly as a request for `llama-3.3-70b` does —
+same ordered backend list, same failover, same quotas. Nothing new happens on
+the request path; the name is resolved and then the existing routing runs.
+
+- **An alias must point at a model in this file.** A dangling one stops chicco
+  starting. Deliberately not a request-time error: an alias that quietly falls
+  through to full rotation gives the caller an arbitrary routing policy with
+  nothing in the logs to say so, which is what aliases exist to prevent.
+- **An alias may not reuse a model id**, or routing would depend on which
+  lookup happened first.
+- **Resolution is logged** (`chicco: alias fast -> llama-3.3-70b`), because a
+  request that went somewhere other than where it asked is precisely what
+  someone reading these logs is following.
+- **Listed on `/v1/models`**, with the target named in `owned_by`. A caller
+  that cannot see the aliases has to be told out of band which names exist,
+  which is the coupling this removes.
+- **Reloaded on SIGHUP** together with the routing table they point into.
