@@ -29,6 +29,12 @@ func (r *Rotator) Reload(cfg Config) {
 	r.models = cfg.Models
 	r.authKey = cfg.APIKey
 	r.quota = cfg.Quota
+	// Reloaded with the quotas they watch. The fired-map is kept, so a SIGHUP
+	// does not re-announce a threshold that was already crossed this window.
+	r.alerts.cfg = cfg.Alerts
+	if r.alerts.cfg.WebhookTimeout <= 0 {
+		r.alerts.cfg.WebhookTimeout = defaultWebhookTimeout
+	}
 
 	keep := make(map[string]bool, len(cfg.Providers))
 	for _, p := range cfg.Providers {
