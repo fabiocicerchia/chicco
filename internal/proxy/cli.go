@@ -58,10 +58,11 @@ const cliErrSnippet = 512
 // Node CLI's stderr and pushes the actual error out of cliErrSnippet.
 var stackFrameRe = regexp.MustCompile(`(?m)^\s+at .*\n?`)
 
-// cliFailure wraps a failed CLI run as a non-2xx upstream so handleChat cools the
-// provider down and fails over: 401 for an auth problem (greys the provider, long
-// cooldown); 429 with the parsed reset time for a usage-limit hit (so the dashboard
-// shows when the next window opens); otherwise a transient 502.
+// cliFailure - Wraps a failed CLI run as a non-2xx upstream so handleChat cools
+// the provider down and fails over: 401 for an auth problem (greys the
+// provider, long cooldown); 429 with the parsed reset time for a usage-limit
+// hit (so the dashboard shows when the next window opens); otherwise a
+// transient 502.
 func cliFailure(msg string) *upstream {
 	// Classify on the WHOLE message, report the useful part of it. The caller
 	// only ever reads the first 512 bytes of an error body (see dispatch), and a
@@ -92,10 +93,11 @@ var (
 	resetClockRe = regexp.MustCompile(`(\d{1,2})(?::(\d{2}))?\s*([ap]m)?`)
 )
 
-// parseResetDuration best-effort extracts how long until a CLI's usage window
+// parseResetDuration - Best-effort extracts how long until a CLI's usage window
 // reopens, from phrasing like "resets in 2h 30m", "try again in 45 minutes", or
-// "resets at 3pm". It anchors on the reset/again clause so a window *length* (e.g.
-// "5-hour limit") isn't mistaken for the reset time. Returns 0 when nothing parses.
+// "resets at 3pm". It anchors on the reset/again clause so a window *length*
+// (e.g. "5-hour limit") isn't mistaken for the reset time. Returns 0 when
+// nothing parses.
 func parseResetDuration(msg string) time.Duration {
 	m := strings.ToLower(msg)
 	clause := ""
@@ -133,8 +135,8 @@ func parseResetDuration(msg string) time.Duration {
 	return 0
 }
 
-// clockReset returns the duration until the next occurrence of a clock time like
-// "3pm" or "15:00" (local time). 0 when it can't parse.
+// clockReset - Returns the duration until the next occurrence of a clock time
+// like "3pm" or "15:00" (local time). 0 when it can't parse.
 func clockReset(s string) time.Duration {
 	m := resetClockRe.FindStringSubmatch(strings.TrimSpace(s))
 	if m == nil || m[1] == "" {
@@ -166,10 +168,10 @@ func clockReset(s string) time.Duration {
 	return time.Until(target)
 }
 
-// runCLI executes a CLI provider for one request and returns its reply as an
-// upstream. A failed run (non-zero exit, timeout, missing binary) is reported as a
-// 502 so the caller cools the provider down and rotates, rather than as a hard
-// error — the behaviour matches a flaky HTTP upstream.
+// runCLI - Executes a CLI provider for one request and returns its reply as an
+// upstream. A failed run (non-zero exit, timeout, missing binary) is reported
+// as a 502 so the caller cools the provider down and rotates, rather than as a
+// hard error — the behaviour matches a flaky HTTP upstream.
 func runCLI(ctx context.Context, p Provider, model string, payload map[string]any) (*upstream, error) {
 	system, user := splitMessages(payload)
 	prompt := user
@@ -272,8 +274,8 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 	}, nil
 }
 
-// splitMessages pulls the system prompt and the joined user/assistant turns out of
-// an OpenAI messages array (decoded as a map).
+// splitMessages - Pulls the system prompt and the joined user/assistant turns
+// out of an OpenAI messages array (decoded as a map).
 func splitMessages(payload map[string]any) (system, user string) {
 	msgs, _ := payload["messages"].([]any)
 	var turns []string
@@ -293,11 +295,11 @@ func splitMessages(payload map[string]any) (system, user string) {
 	return system, strings.Join(turns, "\n\n")
 }
 
-// extractCompletion pulls the reply text (and any reported token counts) out of a
-// CLI's raw output: a dotted path into a JSON object for Output=="json", else the
-// raw stdout verbatim. failed is true when ErrorPath is set and truthy in the JSON.
-// inTokens is 0 unless the tool reports prompt usage at InTokensPath, which the
-// caller then prefers over its own estimate.
+// extractCompletion - Pulls the reply text (and any reported token counts) out
+// of a CLI's raw output: a dotted path into a JSON object for Output=="json",
+// else the raw stdout verbatim. failed is true when ErrorPath is set and truthy
+// in the JSON. inTokens is 0 unless the tool reports prompt usage at
+// InTokensPath, which the caller then prefers over its own estimate.
 func extractCompletion(p Provider, raw []byte) (text string, tokens, inTokens int64, failed bool) {
 	if p.Output != "json" {
 		return string(raw), 0, 0, false
@@ -319,8 +321,8 @@ func extractCompletion(p Provider, raw []byte) (text string, tokens, inTokens in
 	return text, tokens, inTokens, false
 }
 
-// truthy reports whether a decoded JSON value signals "yes/error": a true bool, a
-// non-zero number, or a non-empty/"false" string.
+// truthy - Reports whether a decoded JSON value signals "yes/error": a true
+// bool, a non-zero number, or a non-empty/"false" string.
 func truthy(v any) bool {
 	switch t := v.(type) {
 	case bool:
@@ -334,7 +336,8 @@ func truthy(v any) bool {
 	}
 }
 
-// dotGet walks a dotted path (e.g. "usage.output_tokens") into a decoded JSON map.
+// dotGet - Walks a dotted path (e.g. "usage.output_tokens") into a decoded JSON
+// map.
 func dotGet(m map[string]any, path string) any {
 	if path == "" {
 		return nil
@@ -374,10 +377,10 @@ func asInt64(v any) int64 {
 	}
 }
 
-// synthJSON renders a completion as a non-streamed OpenAI chat.completion object,
-// for callers that sent "stream": false. Carries the fields strict clients
-// require (id/object/created/model/finish_reason) rather than the bare choices
-// array the SSE path gets away with.
+// synthJSON - Renders a completion as a non-streamed OpenAI chat.completion
+// object, for callers that sent "stream": false. Carries the fields strict
+// clients require (id/object/created/model/finish_reason) rather than the bare
+// choices array the SSE path gets away with.
 func synthJSON(model, text string, promptTokens, tokens int64) []byte {
 	out, _ := json.Marshal(map[string]any{
 		"id":      synthID(),
@@ -394,11 +397,12 @@ func synthJSON(model, text string, promptTokens, tokens int64) []byte {
 	return out
 }
 
-// synthSSE renders a completion as the minimal OpenAI SSE stream a client accepts:
-// one content delta, an optional usage chunk (for the dashboard bar), and [DONE].
-// Every chunk carries id/model because they are what a caller reads back to tell
-// WHICH provider served it — /v1/messages relays them as the Anthropic response's
-// id and model, which were empty for CLI-served replies while these were omitted.
+// synthSSE - Renders a completion as the minimal OpenAI SSE stream a client
+// accepts: one content delta, an optional usage chunk (for the dashboard bar),
+// and [DONE]. Every chunk carries id/model because they are what a caller reads
+// back to tell WHICH provider served it — /v1/messages relays them as the
+// Anthropic response's id and model, which were empty for CLI-served replies
+// while these were omitted.
 func synthSSE(model, text string, promptTokens, tokens int64) []byte {
 	var b bytes.Buffer
 	id := synthID()

@@ -26,7 +26,7 @@ type eventLog struct {
 	size int // number of valid entries (≤ maxEvents)
 }
 
-// record appends a new event to the ring buffer.
+// record - Appends a new event to the ring buffer.
 func (el *eventLog) record(tokens int64) {
 	el.buf[el.head] = event{At: time.Now(), Tokens: tokens}
 	el.head = (el.head + 1) % maxEvents
@@ -35,7 +35,7 @@ func (el *eventLog) record(tokens int64) {
 	}
 }
 
-// totals returns the sum of requests and tokens whose timestamp falls within
+// totals - Returns the sum of requests and tokens whose timestamp falls within
 // the last `window` duration (e.g. time.Minute, time.Hour, 24*time.Hour).
 func (el *eventLog) totals(window time.Duration) (reqs int, tokens int64) {
 	cutoff := time.Now().Add(-window)
@@ -49,7 +49,7 @@ func (el *eventLog) totals(window time.Duration) (reqs int, tokens int64) {
 	return
 }
 
-// dailyTotals returns requests and tokens since UTC midnight today, used for
+// dailyTotals - Returns requests and tokens since UTC midnight today, used for
 // the dashboard quota bar's "daily" window (see Provider.effectiveQuota).
 func (el *eventLog) dailyTotals() (reqs int, tokens int64) {
 	now := time.Now().UTC()
@@ -64,7 +64,7 @@ func (el *eventLog) dailyTotals() (reqs int, tokens int64) {
 	return
 }
 
-// windowTotals returns the totals for the provider's effective quota window
+// windowTotals - Returns the totals for the provider's effective quota window
 // (daily / hourly / minutely / none = all-time). "daily" is the only fixed
 // clock boundary (UTC midnight); "hourly"/"minutely" are rolling windows.
 func (el *eventLog) windowTotals(window string) (reqs int, tokens int64) {
@@ -85,11 +85,11 @@ func (el *eventLog) windowTotals(window string) (reqs int, tokens int64) {
 	}
 }
 
-// check inspects the ring buffer against the given quota and returns the earliest
-// time the caller will be unblocked (zero value if no limit is breached). It
-// evaluates all six limits (RPM/RPH/RPD/TPM/TPH/TPD) and returns the maximum
-// blocked-until time so every active limit is respected.
-// Pass the per-model quota when available; fall back to the provider quota otherwise.
+// check - Inspects the ring buffer against the given quota and returns the
+// earliest time the caller will be unblocked (zero value if no limit is
+// breached). It evaluates all six limits (RPM/RPH/RPD/TPM/TPH/TPD) and returns
+// the maximum blocked-until time so every active limit is respected. Pass the
+// per-model quota when available; fall back to the provider quota otherwise.
 func (el *eventLog) check(q Quota) time.Time {
 	now := time.Now()
 	var blockedUntil time.Time
@@ -134,7 +134,7 @@ func (el *eventLog) check(q Quota) time.Time {
 	return blockedUntil
 }
 
-// toSlice returns all valid events as a slice (for persistence).
+// toSlice - Returns all valid events as a slice (for persistence).
 func (el *eventLog) toSlice() []event {
 	out := make([]event, el.size)
 	for i := 0; i < el.size; i++ {
@@ -143,7 +143,7 @@ func (el *eventLog) toSlice() []event {
 	return out
 }
 
-// loadSlice replaces the ring buffer contents with the given slice, ignoring
+// loadSlice - Replaces the ring buffer contents with the given slice, ignoring
 // entries older than 25 hours (they can never affect any rate-limit window).
 func (el *eventLog) loadSlice(events []event) {
 	cutoff := time.Now().Add(-25 * time.Hour)

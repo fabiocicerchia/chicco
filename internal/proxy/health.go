@@ -24,7 +24,7 @@ var healthClient = &http.Client{Timeout: 15 * time.Second}
 // so a network that isn't up yet at boot doesn't leave every provider grey.
 var healthRetryDelay = 3 * time.Second
 
-// probeSlots bounds how many provider probes run at once.
+// probeSlots - Bounds how many provider probes run at once.
 //
 // The measured failure was NOT cpu: with the error text finally logged, a cold-cache
 // boot reported six providers unreachable with two causes, and neither was load —
@@ -45,10 +45,11 @@ func probeSlots() int {
 	return min(max(runtime.NumCPU()/2, 2), 6)
 }
 
-// CheckHealth probes every active provider's /v1/models endpoint with its key and
-// records the result, so the dashboard can grey out a provider whose token is
-// invalid or missing before any real request is routed. It does not consume quota
-// (a models listing is free) and updates each provider's dot as its probe returns.
+// CheckHealth - Probes every active provider's /v1/models endpoint with its key
+// and records the result, so the dashboard can grey out a provider whose token
+// is invalid or missing before any real request is routed. It does not consume
+// quota (a models listing is free) and updates each provider's dot as its probe
+// returns.
 func (r *Rotator) CheckHealth(ctx context.Context) {
 	var wg sync.WaitGroup
 	// Buffered channel as a counting semaphore. Applies to every probe: HTTP ones
@@ -96,9 +97,10 @@ func (r *Rotator) CheckHealth(ctx context.Context) {
 	wg.Wait()
 }
 
-// ReprobeLoop re-runs the health check on an interval so a provider that was down
-// at boot (network not up yet) or rate-limited (a transient 403) recovers to green
-// on its own, without waiting for a real request. Stops when ctx is cancelled.
+// ReprobeLoop - Re-runs the health check on an interval so a provider that was
+// down at boot (network not up yet) or rate-limited (a transient 403) recovers
+// to green on its own, without waiting for a real request. Stops when ctx is
+// cancelled.
 func (r *Rotator) ReprobeLoop(ctx context.Context, every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
@@ -112,12 +114,12 @@ func (r *Rotator) ReprobeLoop(ctx context.Context, every time.Duration) {
 	}
 }
 
-// probeProvider reports a provider's liveness, and why when it is HealthDown. CLI
-// providers are probed by their health_command / credential file (see probeCLI).
-// For HTTP providers it does a GET on /models with the bearer token: a 401/403
-// means the key is bad/missing (HealthAuth); any other reply means reachable and
-// not rejected (HealthOK, covering providers that answer 404); a transport error or
-// 5xx is down (HealthDown).
+// probeProvider - Reports a provider's liveness, and why when it is HealthDown.
+// CLI providers are probed by their health_command / credential file (see
+// probeCLI). For HTTP providers it does a GET on /models with the bearer token:
+// a 401/403 means the key is bad/missing (HealthAuth); any other reply means
+// reachable and not rejected (HealthOK, covering providers that answer 404); a
+// transport error or 5xx is down (HealthDown).
 func probeProvider(ctx context.Context, p Provider) (Health, error) {
 	if p.Kind == "cli" {
 		return probeCLI(ctx, p)
@@ -143,10 +145,11 @@ func probeProvider(ctx context.Context, p Provider) (Health, error) {
 	}
 }
 
-// probeCLI checks a CLI provider without spending quota: run its health_command
-// (a local auth-status check), requiring HealthExpect in the output when set —
-// this is how a logged-out tool greys (HealthAuth). With no health_command, stat
-// the credential file (missing = needs login); otherwise assume healthy.
+// probeCLI - Checks a CLI provider without spending quota: run its
+// health_command (a local auth-status check), requiring HealthExpect in the
+// output when set — this is how a logged-out tool greys (HealthAuth). With no
+// health_command, stat the credential file (missing = needs login); otherwise
+// assume healthy.
 func probeCLI(ctx context.Context, p Provider) (Health, error) {
 	// The tool has to exist before anything else is worth asking. A provider
 	// configured for a CLI that isn't installed here (common in the container

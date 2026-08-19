@@ -52,10 +52,10 @@ func main() {
 	}
 }
 
-// checkConfig loads and validates the config without starting anything, printing
-// each problem, and returns the process exit code (0 = sound, 1 = failed). Warnings
-// (inactive providers) are printed but don't fail the check on their own — only a
-// parse error or a hard validation problem does.
+// checkConfig - Loads and validates the config without starting anything,
+// printing each problem, and returns the process exit code (0 = sound, 1 =
+// failed). Warnings (inactive providers) are printed but don't fail the check
+// on their own — only a parse error or a hard validation problem does.
 func checkConfig(path string) int {
 	cfg, err := proxy.LoadConfig(path)
 	if err != nil {
