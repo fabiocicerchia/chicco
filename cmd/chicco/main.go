@@ -104,7 +104,7 @@ Flags:
 Example:
   chicco -config chicco.yaml -addr :41986
 
-Then point an OpenAI client at http://127.0.0.1%s/v1 (set the client's base URL
+Then point an OpenAI client at http://%s/v1 (set the client's base URL
 to this address).
 `, proxy.DefaultAddr)
 }
