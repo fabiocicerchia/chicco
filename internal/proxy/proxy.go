@@ -1002,6 +1002,8 @@ type dispatchError struct {
 	msg    string
 }
 
+// Error - Returns the message alone. The status travels beside it and is read
+// with dispatchStatus, so it never leaks into text a caller might display.
 func (e *dispatchError) Error() string { return e.msg }
 
 // dispatchStatus - Returns the HTTP status a dispatch error should be reported

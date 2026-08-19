@@ -473,6 +473,11 @@ type sseSink struct {
 	openIdx *int
 }
 
+// writeSSEEvent - Writes one Anthropic SSE frame and flushes it. Flushing per
+// event is the whole point of a stream: a buffered relay would deliver the
+// reply in one lump and the caller could not tell it from a non-streaming one.
+// Write errors are ignored deliberately — the client going away mid-stream is
+// ordinary, and there is no second channel to report it on.
 func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, event string, data map[string]any) {
 	_, _ = io.WriteString(w, "event: "+event+"\n")
 	b, _ := json.Marshal(data)
@@ -550,6 +555,10 @@ func (s *sseSink) finish(stopReason string, _, outputTokens int64) {
 	writeSSEEvent(s.w, s.flusher, "message_stop", map[string]any{"type": "message_stop"})
 }
 
+// respondAnthropicStream - Relays an upstream OpenAI stream to the client as
+// Anthropic SSE, returning the token total for accounting. Headers go out
+// before the first frame, so a failure after this point cannot become a status
+// code — which is why dispatch has to have succeeded first.
 func respondAnthropicStream(w http.ResponseWriter, up *upstream) int64 {
 	defer up.body.Close()
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -613,6 +622,9 @@ func (s *jsonSink) finish(stopReason string, inputTokens, outputTokens int64) {
 	s.inputTokens, s.outputTokens = inputTokens, outputTokens
 }
 
+// respondAnthropicJSON - Buffers an upstream OpenAI stream into a single
+// Anthropic message object, returning the token total for accounting. The
+// upstream is streamed either way; only the client-facing shape differs.
 func respondAnthropicJSON(w http.ResponseWriter, up *upstream) int64 {
 	defer up.body.Close()
 	sink := &jsonSink{}

@@ -21,6 +21,9 @@ import (
 // version is overridable at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
+// main - Parses the flags and hands over to run, whose exit code becomes the
+// process's. Nothing else lives here: the binary is a thin shell around
+// internal/proxy so the proxy can be driven from a test without a process.
 func main() {
 	cfgPath := flag.String("config", "chicco.yaml", "path to the chicco.yaml config file")
 	addr := flag.String("addr", "", "listen address (overrides chicco.yaml; default "+proxy.DefaultAddr+")")
@@ -80,6 +83,9 @@ func checkConfig(path string) int {
 	return 0
 }
 
+// usage - Prints the help screen. Hand-written rather than generated from the
+// FlagSet: what people need first is the shape of chicco.yaml and the two
+// endpoints, not the flag table.
 func usage() {
 	fmt.Fprintf(os.Stderr, `chicco — a local OpenAI- and Anthropic-compatible rotation proxy.
 

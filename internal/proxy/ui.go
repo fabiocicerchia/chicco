@@ -23,8 +23,12 @@ type logBuffer struct {
 	max     int
 }
 
+// newLogBuffer - Builds a log buffer holding at most max lines.
 func newLogBuffer(max int) *logBuffer { return &logBuffer{max: max} }
 
+// Write - Implements io.Writer so the standard logger can be pointed straight
+// at the dashboard. A write is not a line: partial input is held until its
+// newline arrives, or a log line split across two writes would show up as two.
 func (b *logBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -100,6 +104,8 @@ func renderTrack(glyph string) string {
 
 type tickMsg time.Time
 
+// tick - Schedules the next one-second refresh. The dashboard polls rather
+// than being pushed to, so a busy proxy cannot flood the UI with redraws.
 func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
@@ -124,12 +130,16 @@ type uiModel struct {
 	logScroll      int // rows scrolled up from the bottom in the log pane (0 = bottom)
 }
 
+// newUIModel - Builds the dashboard model, focused on the provider table.
 func newUIModel(rot *Rotator, logs *logBuffer, addr string) uiModel {
 	return uiModel{rot: rot, logs: logs, addr: addr, focus: focusProviders}
 }
 
+// Init - Starts the refresh loop. Part of the tea.Model contract.
 func (m uiModel) Init() tea.Cmd { return tick() }
 
+// Update - Handles one event — a resize, a key, or the one-second tick — and
+// returns the next model. Part of the tea.Model contract.
 func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -203,6 +213,9 @@ func (m uiModel) pageSize() int {
 	return p
 }
 
+// View - Renders the whole dashboard: the provider table over the log pane,
+// the log pane taking two fifths of the height. Part of the tea.Model
+// contract.
 func (m uiModel) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "starting chicco dashboard…"
@@ -543,6 +556,9 @@ func modelRow(dot, name, kind, model, usage, reqs, tail string, width int, heade
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
+// renderBar - Draws a usage bar, green until 60% of the quota window, amber to
+// 85%, red above it. pct is clamped, because a provider that reports more usage
+// than its own quota should show a full bar rather than overflow the row.
 func renderBar(pct float64, width int) string {
 	if pct < 0 {
 		pct = 0
@@ -579,6 +595,8 @@ func fmtReset(left time.Duration) string {
 	return t.Format("Jan 2 15:04")
 }
 
+// fmtTok - Renders a token count in the narrowest form that still reads:
+// 1.2M, 4.5k, or the number itself. The table column is fixed-width.
 func fmtTok(n int64) string {
 	switch {
 	case n >= 1_000_000:
@@ -599,6 +617,9 @@ func padRight(s string, w int) string {
 	return s
 }
 
+// truncate - Cuts s to w columns, rune-aware, with an ellipsis where one
+// fits. Counting runes rather than bytes is what keeps a non-ASCII provider or
+// model name from tearing the table's columns apart.
 func truncate(s string, w int) string {
 	if w <= 0 {
 		return ""

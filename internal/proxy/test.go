@@ -36,6 +36,10 @@ type testResult struct {
 	errMsg     string
 }
 
+// runTest - Sends one real request to every active provider and logs what came
+// back. Single-flight: a second run while one is in progress is refused rather
+// than queued, since the point is a quick answer to "is my config live", not a
+// load test.
 func runTest(rot *Rotator) {
 	if !testRunning.CompareAndSwap(false, true) {
 		log.Printf("chicco test: a test run is already in progress")

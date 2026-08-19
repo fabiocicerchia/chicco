@@ -353,6 +353,10 @@ func dotGet(m map[string]any, path string) any {
 	return cur
 }
 
+// asString - Coerces a decoded JSON value to a string. CLI providers emit
+// hand-rolled JSON, so a field that should be a string arrives as a number or
+// is missing entirely often enough to be worth absorbing here rather than at
+// every call site.
 func asString(v any) string {
 	switch t := v.(type) {
 	case string:
@@ -364,6 +368,9 @@ func asString(v any) string {
 	}
 }
 
+// asInt64 - Coerces a decoded JSON number to an int64. encoding/json decodes
+// every number into a float64, so the int and int64 cases only matter for
+// values this package built itself.
 func asInt64(v any) int64 {
 	switch t := v.(type) {
 	case float64:
@@ -438,10 +445,16 @@ func synthSSE(model, text string, promptTokens, tokens int64) []byte {
 	return b.Bytes()
 }
 
+// synthID - Mints a response id for a CLI provider, which has none of its own.
+// Prefixed so a synthesized id is recognisable as chicco's in a log, and
+// nanosecond-based so two replies in the same second do not collide.
 func synthID() string {
 	return "chatcmpl-chicco-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
 
+// synthUsage - Builds the usage block for a CLI provider, which reports no
+// token counts. The shape is OpenAI's because everything downstream reads it
+// that way; the numbers are estimates, and the rotator treats them as such.
 func synthUsage(promptTokens, tokens int64) map[string]any {
 	return map[string]any{
 		"prompt_tokens":     promptTokens,
