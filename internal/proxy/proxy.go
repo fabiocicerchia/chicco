@@ -84,6 +84,9 @@ type Rotator struct {
 	// needs no separate lock).
 	rrCursor int
 	rng      *rand.Rand
+	// alerts warns before a quota runs out. Always non-nil; disabled unless a
+	// threshold is configured.
+	alerts *alerter
 	// quota is the optional top-level cap from Config.Quota, applied across every
 	// provider combined via the eventLogs[globalKey] log (see pick). Zero Quota{}
 	// (the default) means no aggregate cap.
@@ -142,6 +145,7 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		modelRequests: map[string]int{},
 		health:        map[string]Health{},
 		reason:        map[string]string{},
+		alerts:        newAlerter(AlertConfig{}),
 		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -173,6 +177,9 @@ func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	r.modelTokens[mk] += tokens
 	r.dirty = true
 	r.mu.Unlock()
+	// After the counters move, not before: the check reads the same totals the
+	// rate limiter does, so it must see this request.
+	r.checkBudgets(time.Now())
 }
 
 // ModelStat is the per-model usage snapshot embedded in ProviderStat.

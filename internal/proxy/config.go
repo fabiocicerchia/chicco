@@ -31,16 +31,20 @@ type Config struct {
 	// have, since its whole point is to drain one provider's quota and fall
 	// through to the next. Zero value (the default) means no aggregate cap.
 	Quota Quota `yaml:"quota"`
+	// Alerts warns when a provider approaches its quota, instead of the
+	// exhaustion being discovered when requests start failing.
+	Alerts AlertConfig `yaml:"alerts"`
 }
 
 // rawConfig is the intermediate shape used during YAML decoding. providers is
 // kept as a raw yaml.Node so we can detect list vs. map and preserve order.
 type rawConfig struct {
-	Addr      string    `yaml:"addr"`
-	APIKey    string    `yaml:"api_key"`
-	Providers yaml.Node `yaml:"providers"`
-	Models    []Model   `yaml:"models"`
-	Quota     Quota     `yaml:"quota"`
+	Addr      string      `yaml:"addr"`
+	APIKey    string      `yaml:"api_key"`
+	Providers yaml.Node   `yaml:"providers"`
+	Models    []Model     `yaml:"models"`
+	Quota     Quota       `yaml:"quota"`
+	Alerts    AlertConfig `yaml:"alerts"`
 }
 
 // UnmarshalYAML - Lets Config accept providers as either a YAML sequence (list
@@ -56,6 +60,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.APIKey = raw.APIKey
 	c.Models = raw.Models
 	c.Quota = raw.Quota
+	c.Alerts = raw.Alerts
 
 	n := &raw.Providers
 	// Unwrap a document node if present.
