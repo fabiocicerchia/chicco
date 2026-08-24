@@ -36,6 +36,9 @@ type Config struct {
 	// what an agent runner points at, and a scrape endpoint is a different
 	// audience with a different exposure.
 	Metrics MetricsConfig `yaml:"metrics"`
+	// Alerts warns when a provider approaches its quota, instead of the
+	// exhaustion being discovered when requests start failing.
+	Alerts AlertConfig `yaml:"alerts"`
 }
 
 // MetricsConfig configures the Prometheus endpoint. Addr defaults to
@@ -58,9 +61,10 @@ type rawConfig struct {
 	Models    []Model       `yaml:"models"`
 	Quota     Quota         `yaml:"quota"`
 	Metrics   MetricsConfig `yaml:"metrics"`
+	Alerts    AlertConfig   `yaml:"alerts"`
 }
 
-// UnmarshalYAML lets Config accept providers as either a YAML sequence (list
+// UnmarshalYAML - Lets Config accept providers as either a YAML sequence (list
 // format, original chicco.yaml) or a YAML mapping (keyed format, where the map
 // key becomes Provider.Name). Both produce the same []Provider slice in the
 // same document order, so the rest of the code is format-agnostic.
@@ -77,6 +81,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	if c.Metrics.Enabled && c.Metrics.Addr == "" {
 		c.Metrics.Addr = DefaultMetricsAddr
 	}
+	c.Alerts = raw.Alerts
 
 	n := &raw.Providers
 	// Unwrap a document node if present.
@@ -182,11 +187,11 @@ type Provider struct {
 	TimeoutSecs   int      `yaml:"timeout_seconds"`   // CLI run timeout (default 120)
 }
 
-// effectiveQuota derives the dashboard bar parameters from the quota fields.
+// effectiveQuota - Derives the dashboard bar parameters from the quota fields.
 // It returns the quota value, whether it is token-based (true) or request-based
-// (false), and the window string for eventLog.windowTotals.
-// Priority: day > hour > minute (largest window first, so the bar tracks the
-// most meaningful hard cap). Returns quota=0 when no limits are configured.
+// (false), and the window string for eventLog.windowTotals. Priority: day >
+// hour > minute (largest window first, so the bar tracks the most meaningful
+// hard cap). Returns quota=0 when no limits are configured.
 func (p Provider) effectiveQuota() (quota int64, isTokens bool, window string) {
 	q := p.Quota
 	switch {
@@ -233,7 +238,7 @@ type Backend struct {
 	Weight   *int   `yaml:"weight,omitempty"` // nil → inherit provider weight
 }
 
-// effectiveWeight returns the weight for this backend: its own override when
+// effectiveWeight - Returns the weight for this backend: its own override when
 // configured (nil → inherit), otherwise the given provider fallback.
 func (b Backend) effectiveWeight(fallback int) int {
 	if b.Weight != nil {
@@ -242,7 +247,7 @@ func (b Backend) effectiveWeight(fallback int) int {
 	return fallback
 }
 
-// effectiveQuota returns the quota for this backend: the backend's own quota
+// effectiveQuota - Returns the quota for this backend: the backend's own quota
 // when configured, otherwise the given provider fallback. Same return semantics
 // as Provider.effectiveQuota.
 func (b Backend) effectiveQuota(fallback Quota) (quota int64, isTokens bool, window string) {
@@ -268,7 +273,7 @@ func (b Backend) effectiveQuota(fallback Quota) (quota int64, isTokens bool, win
 	}
 }
 
-// LoadConfig reads and parses chicco.yaml, defaulting the listen address and
+// LoadConfig - Reads and parses chicco.yaml, defaulting the listen address and
 // expanding ${VAR} references in each provider's api_key from the environment.
 func LoadConfig(path string) (Config, error) {
 	data, err := os.ReadFile(path)
@@ -307,7 +312,7 @@ func LoadConfig(path string) (Config, error) {
 	return c, nil
 }
 
-// resolveModels back-fills Provider.Models from the models: routing table for
+// resolveModels - Back-fills Provider.Models from the models: routing table for
 // providers that were declared without an inline models: list (the map format).
 // A backend entry's model name is added to its provider's Models slice, in the
 // order backends appear across all model definitions. Duplicates are skipped so
@@ -354,12 +359,13 @@ var (
 	knownStrategies = map[string]bool{"": true, "order": true, "round_robin": true, "random": true, "weighted": true}
 )
 
-// Validate checks a loaded Config for mistakes that would make a provider unusable
-// or a field silently ignored, returning a human-readable problem for each. It is
-// what `chicco -check` reports; an empty result means the config is sound. It does
-// not open sockets or run any provider — a static check safe to run in CI or a
-// pre-commit hook. Problems prefixed "warning:" don't make the config invalid (the
-// provider is just skipped at startup); the rest are hard errors.
+// Validate - Checks a loaded Config for mistakes that would make a provider
+// unusable or a field silently ignored, returning a human-readable problem for
+// each. It is what `chicco -check` reports; an empty result means the config is
+// sound. It does not open sockets or run any provider — a static check safe to
+// run in CI or a pre-commit hook. Problems prefixed "warning:" don't make the
+// config invalid (the provider is just skipped at startup); the rest are hard
+// errors.
 func (c Config) Validate() []string {
 	var problems []string
 	if c.Quota.RPM < 0 || c.Quota.RPH < 0 || c.Quota.RPD < 0 || c.Quota.TPM < 0 || c.Quota.TPH < 0 || c.Quota.TPD < 0 {
