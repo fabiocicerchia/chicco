@@ -91,6 +91,7 @@ func Run(opts Options) error {
 	if cfg.Aliases != nil {
 		rot.aliases = cfg.Aliases
 	}
+	rot.costs = newCostTracker(cfg.Pricing)
 	rot.alerts = newAlerter(cfg.Alerts)
 	active := rot.Active()
 	if len(active) == 0 {

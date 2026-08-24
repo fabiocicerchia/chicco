@@ -65,6 +65,42 @@ binds no port, so it's safe in CI or a pre-commit hook.
 
 `chicco -help` prints full usage.
 
+## Cost
+
+Token counts alone do not answer what a route costs. Declare prices and chicco
+prices each request as it completes:
+
+```yaml
+pricing:
+  currency: USD
+  models:
+    gpt-4o-mini:
+      input_per_million: 0.15
+      output_per_million: 0.60
+```
+
+Per **million** tokens, input and output separately — that is the unit every
+published price list uses, and the two differ by three or four times, so a cost
+computed from a total token count is wrong by whatever shape the request had.
+
+`currency` is a label. chicco does no conversion; it reports the unit the
+prices were written in, so a report cannot be read as dollars when it was
+written in euros. Prices with no currency are labelled `unspecified` rather
+than assumed.
+
+Per-request cost appears in the log line (`served 812 tokens (0.0004 USD)`),
+and the session total — split by provider and by model — is on `/v1/status`
+under `cost`.
+
+**Unpriced is not free.** A model with no entry is counted as unpriced and
+named in the summary, never folded into the total as zero. A configured price
+of `0` is the way to say a free tier costs nothing, which is a different
+statement and one most of chicco's providers need.
+
+Prices come from config rather than from the providers: there is no common API
+for them, they change rarely, and a proxy that phoned home for a price list
+would gain a failure mode on the request path in exchange for a number nobody
+reads in the moment.
 ## Budget alerts
 
 Quota exhaustion is otherwise discovered when requests start failing. In

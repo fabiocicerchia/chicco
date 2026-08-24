@@ -36,6 +36,9 @@ type Config struct {
 	// ask for "fast" and the routing table decides what that means today.
 	// Changing a backend then means editing chicco.yaml, not every caller.
 	Aliases map[string]string `yaml:"aliases"`
+	// Pricing turns the token counters into money. Optional: with no prices
+	// configured, every request reports as unpriced rather than as free.
+	Pricing Pricing `yaml:"pricing"`
 	// Alerts warns when a provider approaches its quota, instead of the
 	// exhaustion being discovered when requests start failing.
 	Alerts AlertConfig `yaml:"alerts"`
@@ -50,6 +53,7 @@ type rawConfig struct {
 	Models    []Model           `yaml:"models"`
 	Quota     Quota             `yaml:"quota"`
 	Aliases   map[string]string `yaml:"aliases"`
+	Pricing   Pricing           `yaml:"pricing"`
 	Alerts    AlertConfig       `yaml:"alerts"`
 }
 
@@ -67,6 +71,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.Models = raw.Models
 	c.Quota = raw.Quota
 	c.Aliases = raw.Aliases
+	c.Pricing = raw.Pricing
 	c.Alerts = raw.Alerts
 
 	n := &raw.Providers

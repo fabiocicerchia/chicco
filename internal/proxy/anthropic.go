@@ -60,7 +60,11 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 		tokens = respondAnthropicJSON(w, res.up)
 	}
 	r.recordUsage(res.provider, res.model, tokens)
-	log.Printf("chicco: %s (%s) served %d tokens (anthropic)", res.provider, res.model, tokens)
+	// Only the total is available on this path — the translator sums the
+	// stream — so the cost is priced at the output rate, which is the safe
+	// direction. See costTracker.cost.
+	log.Printf("chicco: %s (%s) served %d tokens (anthropic)%s", res.provider, res.model, tokens,
+		r.costNote(res.provider, res.model, Usage{Total: tokens}))
 }
 
 // writeAnthropicError - Replies with Anthropic's error envelope
