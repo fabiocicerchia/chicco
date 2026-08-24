@@ -14,14 +14,14 @@ import (
 // is re-read, validated, and applied via Reload, which keeps the live usage
 // counters and cooldowns of providers that survive the edit.
 
-// Reload swaps in a new provider set and virtual model table (each model may carry
-// its own load-balancing strategy) and inbound api_key from a re-read config
-// without dropping live state: usage counters,
-// cooldowns and health are keyed by provider name (or "provider/model" for a
-// per-model quota), so a provider or backend still present keeps its
-// tokens/requests/cooldown across the reload; a removed one's state is dropped and
-// a new one starts fresh. The listen address is not changed — the socket is already
-// bound, so an addr edit needs a real restart.
+// Reload - Swaps in a new provider set and virtual model table (each model may
+// carry its own load-balancing strategy) and inbound api_key from a re-read
+// config without dropping live state: usage counters, cooldowns and health are
+// keyed by provider name (or "provider/model" for a per-model quota), so a
+// provider or backend still present keeps its tokens/requests/cooldown across
+// the reload; a removed one's state is dropped and a new one starts fresh. The
+// listen address is not changed — the socket is already bound, so an addr edit
+// needs a real restart.
 func (r *Rotator) Reload(cfg Config) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -35,6 +35,12 @@ func (r *Rotator) Reload(cfg Config) {
 	}
 	r.authKey = cfg.APIKey
 	r.quota = cfg.Quota
+	// Reloaded with the quotas they watch. The fired-map is kept, so a SIGHUP
+	// does not re-announce a threshold that was already crossed this window.
+	r.alerts.cfg = cfg.Alerts
+	if r.alerts.cfg.WebhookTimeout <= 0 {
+		r.alerts.cfg.WebhookTimeout = defaultWebhookTimeout
+	}
 
 	keep := make(map[string]bool, len(cfg.Providers))
 	for _, p := range cfg.Providers {
@@ -82,7 +88,7 @@ func (r *Rotator) Reload(cfg Config) {
 	forget(r.modelIdx, keep)
 }
 
-// forget deletes every entry of m whose key is not in keep.
+// forget - Deletes every entry of m whose key is not in keep.
 func forget[V any](m map[string]V, keep map[string]bool) {
 	for k := range m {
 		if !keep[k] {
@@ -91,11 +97,11 @@ func forget[V any](m map[string]V, keep map[string]bool) {
 	}
 }
 
-// reloadFromFile re-reads the config file and applies it to the rotator, preserving
-// live state. A parse error or a hard validation problem aborts the reload — the
-// running config is kept — while warnings (inactive providers, unknown regions) are
-// logged. On success it re-probes health so added providers get a dot. Returns
-// whether the reload was applied.
+// reloadFromFile - Re-reads the config file and applies it to the rotator,
+// preserving live state. A parse error or a hard validation problem aborts the
+// reload — the running config is kept — while warnings (inactive providers,
+// unknown regions) are logged. On success it re-probes health so added
+// providers get a dot. Returns whether the reload was applied.
 func reloadFromFile(rot *Rotator, path string) bool {
 	cfg, err := LoadConfig(path)
 	if err != nil {

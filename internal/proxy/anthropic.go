@@ -21,7 +21,7 @@ import (
 // SSE-event shape. Cooldown, health, quota, and the dashboard are untouched —
 // they only ever see the OpenAI shape.
 
-// handleMessages is the Anthropic-compatible sibling of handleChat: same
+// handleMessages - Is the Anthropic-compatible sibling of handleChat: same
 // rotation, cooldown, and quota machinery (via dispatch), different wire format
 // in and out.
 func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
@@ -63,7 +63,7 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 	log.Printf("chicco: %s (%s) served %d tokens (anthropic)", res.provider, res.model, tokens)
 }
 
-// writeAnthropicError replies with Anthropic's error envelope
+// writeAnthropicError - Replies with Anthropic's error envelope
 // ({"type":"error","error":{"type","message"}}) rather than OpenAI's.
 func writeAnthropicError(w http.ResponseWriter, status int, kind, msg string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -110,7 +110,7 @@ type anthropicRequest struct {
 	ToolChoice    json.RawMessage    `json:"tool_choice,omitempty"`
 }
 
-// anthropicToOpenAI decodes an Anthropic /v1/messages body into an
+// anthropicToOpenAI - Decodes an Anthropic /v1/messages body into an
 // OpenAI-shaped payload ready for dispatch(), plus the requested model and
 // whether the caller wants a streamed reply.
 func anthropicToOpenAI(body []byte) (payload map[string]any, model string, stream bool, err error) {
@@ -179,10 +179,10 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 	return payload, req.Model, req.Stream, nil
 }
 
-// convertAnthropicMessage turns one Anthropic message (string or content-block
-// content) into one or more OpenAI-shaped messages. A user turn's tool_result
-// blocks become separate role:"tool" messages (OpenAI's shape); an assistant
-// turn's tool_use blocks become one message's tool_calls array.
+// convertAnthropicMessage - Turns one Anthropic message (string or
+// content-block content) into one or more OpenAI-shaped messages. A user turn's
+// tool_result blocks become separate role:"tool" messages (OpenAI's shape); an
+// assistant turn's tool_use blocks become one message's tool_calls array.
 func convertAnthropicMessage(m anthropicMessage) ([]map[string]any, error) {
 	if s, ok := anthropicStringContent(m.Content); ok {
 		return []map[string]any{{"role": m.Role, "content": s}}, nil
@@ -248,8 +248,8 @@ func convertAnthropicMessage(m anthropicMessage) ([]map[string]any, error) {
 	return out, nil
 }
 
-// anthropicStringContent reports whether raw is a plain JSON string (Anthropic
-// allows "content" to be either a string or a content-block array).
+// anthropicStringContent - Reports whether raw is a plain JSON string
+// (Anthropic allows "content" to be either a string or a content-block array).
 func anthropicStringContent(raw json.RawMessage) (string, bool) {
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
@@ -258,7 +258,7 @@ func anthropicStringContent(raw json.RawMessage) (string, bool) {
 	return "", false
 }
 
-// anthropicBlockText extracts text from a field that may be a plain string, a
+// anthropicBlockText - Extracts text from a field that may be a plain string, a
 // content-block array (joining any text blocks), or absent — used for both
 // "system" and a tool_result's "content".
 func anthropicBlockText(raw json.RawMessage) string {
@@ -284,7 +284,7 @@ func anthropicBlockText(raw json.RawMessage) string {
 	return text.String()
 }
 
-// anthropicToolChoice maps Anthropic's tool_choice shape to OpenAI's.
+// anthropicToolChoice - Maps Anthropic's tool_choice shape to OpenAI's.
 func anthropicToolChoice(raw json.RawMessage) any {
 	var tc struct {
 		Type string `json:"type"`
@@ -352,7 +352,7 @@ type openAIChunk struct {
 	} `json:"usage"`
 }
 
-// mapStopReason maps an OpenAI finish_reason to Anthropic's stop_reason.
+// mapStopReason - Maps an OpenAI finish_reason to Anthropic's stop_reason.
 func mapStopReason(openaiReason string) string {
 	switch openaiReason {
 	case "length":
@@ -366,7 +366,7 @@ func mapStopReason(openaiReason string) string {
 	}
 }
 
-// translateOpenAIStream reads an upstream OpenAI SSE body (chicco always
+// translateOpenAIStream - Reads an upstream OpenAI SSE body (chicco always
 // requests one — see handleMessages) line by line and drives sink through the
 // equivalent Anthropic event sequence. It also accepts a single non-streamed
 // OpenAI JSON body (choices[].message instead of choices[].delta) so a future
@@ -473,6 +473,11 @@ type sseSink struct {
 	openIdx *int
 }
 
+// writeSSEEvent - Writes one Anthropic SSE frame and flushes it. Flushing per
+// event is the whole point of a stream: a buffered relay would deliver the
+// reply in one lump and the caller could not tell it from a non-streaming one.
+// Write errors are ignored deliberately — the client going away mid-stream is
+// ordinary, and there is no second channel to report it on.
 func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, event string, data map[string]any) {
 	_, _ = io.WriteString(w, "event: "+event+"\n")
 	b, _ := json.Marshal(data)
@@ -550,6 +555,10 @@ func (s *sseSink) finish(stopReason string, _, outputTokens int64) {
 	writeSSEEvent(s.w, s.flusher, "message_stop", map[string]any{"type": "message_stop"})
 }
 
+// respondAnthropicStream - Relays an upstream OpenAI stream to the client as
+// Anthropic SSE, returning the token total for accounting. Headers go out
+// before the first frame, so a failure after this point cannot become a status
+// code — which is why dispatch has to have succeeded first.
 func respondAnthropicStream(w http.ResponseWriter, up *upstream) int64 {
 	defer up.body.Close()
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -613,6 +622,9 @@ func (s *jsonSink) finish(stopReason string, inputTokens, outputTokens int64) {
 	s.inputTokens, s.outputTokens = inputTokens, outputTokens
 }
 
+// respondAnthropicJSON - Buffers an upstream OpenAI stream into a single
+// Anthropic message object, returning the token total for accounting. The
+// upstream is streamed either way; only the client-facing shape differs.
 func respondAnthropicJSON(w http.ResponseWriter, up *upstream) int64 {
 	defer up.body.Close()
 	sink := &jsonSink{}

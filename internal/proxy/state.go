@@ -28,8 +28,9 @@ type persistedState struct {
 	Updated time.Time            `json:"updated"`
 }
 
-// EnablePersistence points the rotator at a state file and loads any saved
-// counters into it. Best effort: a missing or unreadable file just starts empty.
+// EnablePersistence - Points the rotator at a state file and loads any saved
+// counters into it. Best effort: a missing or unreadable file just starts
+// empty.
 func (r *Rotator) EnablePersistence(path string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -64,8 +65,9 @@ func (r *Rotator) EnablePersistence(path string) {
 	}
 }
 
-// Persist atomically writes the counters to the state file when they have changed
-// since the last write. No-op when persistence is disabled or nothing changed.
+// Persist - Atomically writes the counters to the state file when they have
+// changed since the last write. No-op when persistence is disabled or nothing
+// changed.
 func (r *Rotator) Persist() error {
 	r.mu.Lock()
 	if r.statePath == "" || !r.dirty {
