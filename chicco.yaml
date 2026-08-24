@@ -167,6 +167,12 @@ models:
       - provider: cerebras
         model: zai-glm-4.7
 
+# metrics: (optional) Prometheus exposition on a separate listener. Off unless
+# enabled; addr defaults to 127.0.0.1:41987. No auth of its own — bind it where
+# only the scraper can reach it. See docs/operations.md.
+# metrics:
+#   enabled: true
+#   addr: "127.0.0.1:41987"
 # pricing: (optional) what each model costs, so the token counters become
 # money. Per MILLION tokens, input and output separately — that is the unit
 # every published price list uses, and they differ by 3-4x, so a cost computed

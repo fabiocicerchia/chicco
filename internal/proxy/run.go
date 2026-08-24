@@ -136,6 +136,19 @@ func Run(opts Options) error {
 		}()
 	}
 
+	// Metrics listener, when configured. Its own port and its own goroutine: a
+	// scrape must not be able to occupy a slot on the proxy listener, and a
+	// misconfigured metrics addr must not stop the proxy serving.
+	if cfg.Metrics.Enabled {
+		msrv := &http.Server{Addr: cfg.Metrics.Addr, Handler: rot.MetricsHandler(), ReadHeaderTimeout: readHeaderTimeout}
+		go func() {
+			log.Printf("chicco: metrics on http://%s/metrics", cfg.Metrics.Addr)
+			if err := msrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Println("chicco: metrics server error:", err)
+			}
+		}()
+	}
+
 	// Always keep a log buffer so /v1/status (the web dashboard) has something to
 	// show even headless — it's the only UI in that mode, so its logs panel can't
 	// rely on the TUI being the one populating it.

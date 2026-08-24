@@ -84,6 +84,10 @@ type Rotator struct {
 	// needs no separate lock).
 	rrCursor int
 	rng      *rand.Rand
+	// metrics holds the Prometheus counters. Always present so the record hooks
+	// need no nil check on the hot path; only exposed when a metrics listener is
+	// configured (see Run).
+	metrics *metrics
 	// costs prices requests from the config's price list. Always non-nil; it
 	// reports every model as unpriced until prices are configured.
 	costs *costTracker
@@ -148,6 +152,7 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		modelRequests: map[string]int{},
 		health:        map[string]Health{},
 		reason:        map[string]string{},
+		metrics:       newMetrics(),
 		costs:         newCostTracker(Pricing{}),
 		alerts:        newAlerter(AlertConfig{}),
 		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -181,6 +186,7 @@ func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	r.modelTokens[mk] += tokens
 	r.dirty = true
 	r.mu.Unlock()
+	r.metrics.observeTokens(name, model, tokens)
 	// After the counters move, not before: the check reads the same totals the
 	// rate limiter does, so it must see this request.
 	r.checkBudgets(time.Now())
@@ -581,6 +587,9 @@ func (r *Rotator) block(name string, d time.Duration, reason string) {
 	r.reason[name] = reason
 	r.dirty = true
 	r.mu.Unlock()
+	// Outside the lock: the metrics mutex is a different one, and taking it
+	// under r.mu is the only way this package could deadlock.
+	r.metrics.observeBlock(name, reason)
 }
 
 // isAuth - Reports whether a status means the key was rejected (401/403), as
@@ -1092,18 +1101,22 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		// HTTP providers POST upstream; CLI providers run a subprocess. Both return
 		// the same `upstream` so the rest of the loop is identical.
 		var up *upstream
+		started := time.Now()
 		if p.Kind == "cli" {
 			up, err = runCLI(ctx, p, model, payload)
 		} else {
 			up, err = forward(ctx, p, upstreamBody, upstreamPath)
 		}
+		took := time.Since(started)
 		if err != nil {
+			r.metrics.observeError(p.Name, "transport", took)
 			r.block(p.Name, defaultCooldown, "error")
 			lastErr = fmt.Sprintf("%s: %v", p.Name, err)
 			log.Printf("chicco: %s (%s) transport error, blocked %s: %v", p.Name, model, defaultCooldown, err)
 			continue
 		}
 		if up.status < 200 || up.status >= 300 {
+			r.metrics.observeError(p.Name, strconv.Itoa(up.status), took)
 			snippet, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
 			up.body.Close()
 			text := strings.TrimSpace(string(snippet))
@@ -1121,6 +1134,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 			continue
 		}
 		log.Printf("chicco: routing to %s (%s)", p.Name, model)
+		r.metrics.observeRequest(p.Name, model, took)
 		r.setHealth(p.Name, HealthOK) // a 2xx proves the provider works
 		return &dispatchResult{up: up, provider: p.Name, model: model}, nil
 	}
