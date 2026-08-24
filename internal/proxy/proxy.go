@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,6 +85,9 @@ type Rotator struct {
 	// needs no separate lock).
 	rrCursor int
 	rng      *rand.Rand
+	// aliases map a caller-facing name onto a virtual model id. Read under
+	// r.mu so a SIGHUP reload can change them without a restart.
+	aliases map[string]string
 	// metrics holds the Prometheus counters. Always present so the record hooks
 	// need no nil check on the hot path; only exposed when a metrics listener is
 	// configured (see Run).
@@ -152,6 +156,7 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		modelRequests: map[string]int{},
 		health:        map[string]Health{},
 		reason:        map[string]string{},
+		aliases:       map[string]string{},
 		metrics:       newMetrics(),
 		costs:         newCostTracker(Pricing{}),
 		alerts:        newAlerter(AlertConfig{}),
@@ -350,6 +355,30 @@ func (r *Rotator) servable(id string) bool {
 	return false
 }
 
+// resolveAlias maps a caller-facing name onto the virtual model it stands for,
+// returning the input unchanged when it is not an alias. Validated at load, so
+// a name reaching here always points at a model that exists.
+func (r *Rotator) resolveAlias(requested string) (string, bool) {
+	r.mu.Lock()
+	target, ok := r.aliases[requested]
+	r.mu.Unlock()
+	if !ok {
+		return requested, false
+	}
+	return target, true
+}
+
+// Aliases is a copy of the alias table, for the status endpoint and the UI.
+func (r *Rotator) Aliases() map[string]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make(map[string]string, len(r.aliases))
+	for k, v := range r.aliases {
+		out[k] = v
+	}
+	return out
+}
+
 // activeForModel - Returns the subset of active providers that back a named
 // virtual model, each trimmed to only the backend model(s) listed for that
 // virtual model, plus the load-balancing strategy configured on that virtual
@@ -357,6 +386,12 @@ func (r *Rotator) servable(id string) bool {
 // virtual model) it returns all active providers unchanged and the "order"
 // (config order) strategy, since there's no virtual model to carry one.
 func (r *Rotator) activeForModel(requested string) (providers []Provider, strategy string) {
+	if target, aliased := r.resolveAlias(requested); aliased {
+		// Logged because a request routed somewhere other than where it asked
+		// is exactly what someone reading these logs is trying to follow.
+		log.Printf("chicco: alias %s -> %s", requested, target)
+		requested = target
+	}
 	all := r.Active()
 	if requested == "chicco:auto" || requested == "" {
 		return all, "order"
@@ -912,6 +947,17 @@ func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 	data = append(data, modelObj{ID: "chicco:auto", Object: "model", Created: now, OwnedBy: "chicco"})
 	for _, id := range ids {
 		data = append(data, modelObj{ID: id, Object: "model", Created: now, OwnedBy: "chicco"})
+	}
+	// Aliases are listed too: a caller that cannot see them has to be told out
+	// of band what names exist, which is the coupling aliases exist to remove.
+	aliases := r.Aliases()
+	names := make([]string, 0, len(aliases))
+	for name := range aliases {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		data = append(data, modelObj{ID: name, Object: "model", Created: now, OwnedBy: "chicco (alias for " + aliases[name] + ")"})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data})

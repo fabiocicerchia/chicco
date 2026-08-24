@@ -88,6 +88,9 @@ func Run(opts Options) error {
 	rot := NewRotator(cfg.Providers, cfg.Models)
 	rot.authKey = cfg.APIKey // shared secret guarding inbound requests, if set
 	rot.quota = cfg.Quota    // optional cap across every provider combined, if set
+	if cfg.Aliases != nil {
+		rot.aliases = cfg.Aliases
+	}
 	rot.costs = newCostTracker(cfg.Pricing)
 	rot.alerts = newAlerter(cfg.Alerts)
 	active := rot.Active()

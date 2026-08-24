@@ -27,6 +27,12 @@ func (r *Rotator) Reload(cfg Config) {
 	defer r.mu.Unlock()
 	r.providers = cfg.Providers
 	r.models = cfg.Models
+	// Aliases change with the routing table they point into, so they reload
+	// together with it — a SIGHUP is how you repoint "fast" at a new backend.
+	r.aliases = cfg.Aliases
+	if r.aliases == nil {
+		r.aliases = map[string]string{}
+	}
 	r.authKey = cfg.APIKey
 	r.quota = cfg.Quota
 	// Reloaded with the quotas they watch. The fired-map is kept, so a SIGHUP
