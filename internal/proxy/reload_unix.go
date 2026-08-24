@@ -9,9 +9,10 @@ import (
 	"syscall"
 )
 
-// watchSIGHUP reloads the config from path on every SIGHUP until ctx is done, so
-// `kill -HUP $(pidof chicco)` (or systemd's reload) applies chicco.yaml edits
-// without a restart. Non-Windows only; the Windows build has a no-op stub.
+// watchSIGHUP - Reloads the config from path on every SIGHUP until ctx is done,
+// so `kill -HUP $(pidof chicco)` (or systemd's reload) applies chicco.yaml
+// edits without a restart. Non-Windows only; the Windows build has a no-op
+// stub.
 func watchSIGHUP(ctx context.Context, rot *Rotator, path string) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGHUP)
