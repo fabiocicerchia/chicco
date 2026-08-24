@@ -176,6 +176,14 @@ models:
 # aliases:
 #   fast: llama-3.3-70b
 #   smart: glm-4.7
+
+# metrics: (optional) Prometheus exposition on a separate listener. Off unless
+# enabled; addr defaults to 127.0.0.1:41987. No auth of its own — bind it where
+# only the scraper can reach it. See docs/operations.md.
+# metrics:
+#   enabled: true
+#   addr: "127.0.0.1:41987"
+
 # pricing: (optional) what each model costs, so the token counters become
 # money. Per MILLION tokens, input and output separately — that is the unit
 # every published price list uses, and they differ by 3-4x, so a cost computed
@@ -195,6 +203,7 @@ models:
 #     llama-3.3-70b:
 #       input_per_million: 0
 #       output_per_million: 0
+
 # alerts: (optional) warn before a quota runs out, instead of discovering it
 # when requests start failing. threshold_percent is a share of each provider's
 # own quota; 0 (the default) disables alerting. The log line is emitted either
