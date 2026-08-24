@@ -24,11 +24,11 @@ import (
 // so long-running chat completions are unaffected.
 const readHeaderTimeout = 10 * time.Second
 
-// RequireAuthOnBind refuses to let chicco be reachable and unauthenticated at the
-// same time. chicco holds a working API key for every configured provider, so an
-// open listener on a routable address hands those keys to anything that can reach
-// the port. Startup is the only place to catch it — once serving, the exposure has
-// already happened.
+// RequireAuthOnBind - Refuses to let chicco be reachable and unauthenticated at
+// the same time. chicco holds a working API key for every configured provider,
+// so an open listener on a routable address hands those keys to anything that
+// can reach the port. Startup is the only place to catch it — once serving, the
+// exposure has already happened.
 func RequireAuthOnBind(addr, apiKey string) error {
 	if apiKey != "" || isLoopback(addr) {
 		return nil
@@ -37,8 +37,9 @@ func RequireAuthOnBind(addr, apiKey string) error {
 		"set api_key in chicco.yaml, or bind to 127.0.0.1", addr)
 }
 
-// authState describes the inbound auth posture for the startup log, so "is this
-// thing open?" is answerable from the log line rather than by reading the config.
+// authState - Describes the inbound auth posture for the startup log, so "is
+// this thing open?" is answerable from the log line rather than by reading the
+// config.
 func authState(apiKey string) string {
 	if apiKey == "" {
 		return "no api_key — open"
@@ -46,7 +47,7 @@ func authState(apiKey string) string {
 	return "api_key set"
 }
 
-// isLoopback reports whether addr binds only the loopback interface. A bare
+// isLoopback - Reports whether addr binds only the loopback interface. A bare
 // ":41986" or "0.0.0.0:41986" is not loopback: it listens on every interface.
 func isLoopback(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
@@ -69,7 +70,7 @@ type Options struct {
 	Version    string // build version, shown in log lines
 }
 
-// Run loads the config, starts the health probes and persistence loop, and
+// Run - Loads the config, starts the health probes and persistence loop, and
 // serves until the dashboard exits (or forever, headless). It returns an error
 // for fatal startup problems; the caller owns the process exit code.
 func Run(opts Options) error {
@@ -88,6 +89,7 @@ func Run(opts Options) error {
 	rot.authKey = cfg.APIKey // shared secret guarding inbound requests, if set
 	rot.quota = cfg.Quota    // optional cap across every provider combined, if set
 	rot.costs = newCostTracker(cfg.Pricing)
+	rot.alerts = newAlerter(cfg.Alerts)
 	active := rot.Active()
 	if len(active) == 0 {
 		return fmt.Errorf("no providers with an API key and models are configured —\n"+

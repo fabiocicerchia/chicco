@@ -4,9 +4,9 @@ import (
 	"net/http"
 )
 
-// handleDashboard serves the self-contained HTML web dashboard that mirrors the
-// TUI. The page polls /v1/status every second and renders the provider table and
-// log pane in the browser without any external dependencies.
+// handleDashboard - Serves the self-contained HTML web dashboard that mirrors
+// the TUI. The page polls /v1/status every second and renders the provider
+// table and log pane in the browser without any external dependencies.
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

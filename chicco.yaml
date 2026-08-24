@@ -186,3 +186,16 @@ models:
 #     llama-3.3-70b:
 #       input_per_million: 0
 #       output_per_million: 0
+# alerts: (optional) warn before a quota runs out, instead of discovering it
+# when requests start failing. threshold_percent is a share of each provider's
+# own quota; 0 (the default) disables alerting. The log line is emitted either
+# way — webhook is extra.
+#
+# Fires ONCE per crossing and re-arms when the window rolls over, so a daily
+# quota can warn again tomorrow. The webhook payload carries provider,
+# threshold and usage figures only — never request content — and a failed post
+# is logged, never returned: a notification must not fail a completion.
+# alerts:
+#   threshold_percent: 80
+#   webhook: https://hooks.example.com/chicco
+#   webhook_timeout: 5s

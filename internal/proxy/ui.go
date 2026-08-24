@@ -23,8 +23,12 @@ type logBuffer struct {
 	max     int
 }
 
+// newLogBuffer - Builds a log buffer holding at most max lines.
 func newLogBuffer(max int) *logBuffer { return &logBuffer{max: max} }
 
+// Write - Implements io.Writer so the standard logger can be pointed straight
+// at the dashboard. A write is not a line: partial input is held until its
+// newline arrives, or a log line split across two writes would show up as two.
 func (b *logBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -43,7 +47,7 @@ func (b *logBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// tail returns the last n stored lines (fewer if not yet that many).
+// tail - Returns the last n stored lines (fewer if not yet that many).
 func (b *logBuffer) tail(n int) []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -58,7 +62,7 @@ func (b *logBuffer) tail(n int) []string {
 	return out
 }
 
-// allLines returns a copy of all stored lines, oldest first.
+// allLines - Returns a copy of all stored lines, oldest first.
 func (b *logBuffer) allLines() []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -87,7 +91,7 @@ var (
 	scrollThumbStyle = lipgloss.NewStyle().Foreground(colGrey)
 )
 
-// renderTrack styles one scrollbarColumn glyph: the thumb ("█") stands out in
+// renderTrack - Styles one scrollbarColumn glyph: the thumb ("█") stands out in
 // scrollThumbStyle, the track ("│") and blank column stay dim like the border.
 func renderTrack(glyph string) string {
 	if glyph == "█" {
@@ -100,6 +104,8 @@ func renderTrack(glyph string) string {
 
 type tickMsg time.Time
 
+// tick - Schedules the next one-second refresh. The dashboard polls rather
+// than being pushed to, so a busy proxy cannot flood the UI with redraws.
 func tick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
@@ -124,12 +130,16 @@ type uiModel struct {
 	logScroll      int // rows scrolled up from the bottom in the log pane (0 = bottom)
 }
 
+// newUIModel - Builds the dashboard model, focused on the provider table.
 func newUIModel(rot *Rotator, logs *logBuffer, addr string) uiModel {
 	return uiModel{rot: rot, logs: logs, addr: addr, focus: focusProviders}
 }
 
+// Init - Starts the refresh loop. Part of the tea.Model contract.
 func (m uiModel) Init() tea.Cmd { return tick() }
 
+// Update - Handles one event — a resize, a key, or the one-second tick — and
+// returns the next model. Part of the tea.Model contract.
 func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -192,7 +202,8 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// pageSize returns how many lines to jump on pgup/pgdown — half the log pane height.
+// pageSize - Returns how many lines to jump on pgup/pgdown — half the log pane
+// height.
 func (m uiModel) pageSize() int {
 	logH := m.height * 2 / 5
 	p := (logH - 2) / 2
@@ -202,6 +213,9 @@ func (m uiModel) pageSize() int {
 	return p
 }
 
+// View - Renders the whole dashboard: the provider table over the log pane,
+// the log pane taking two fifths of the height. Part of the tea.Model
+// contract.
 func (m uiModel) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "starting chicco dashboard…"
@@ -216,9 +230,9 @@ func (m uiModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, top, bottom)
 }
 
-// renderModels draws the provider table inside a box of exactly w×h.
-// scroll is how many provider rows have been scrolled past the top (0 = top).
-// focused controls whether the border is highlighted.
+// renderModels - Draws the provider table inside a box of exactly w×h. scroll
+// is how many provider rows have been scrolled past the top (0 = top). focused
+// controls whether the border is highlighted.
 func (m uiModel) renderModels(w, h int, scroll int, focused bool) string {
 	innerW := w - 4 // border (2) + horizontal padding (2)
 	innerH := h - 2 // border (2)
@@ -282,7 +296,7 @@ func (m uiModel) renderModels(w, h int, scroll int, focused bool) string {
 	return style.Render(strings.Join(lines, "\n"))
 }
 
-// legendLine is the colour key for the status dots plus key hints.
+// legendLine - Is the colour key for the status dots plus key hints.
 func legendLine() string {
 	g := func(c lipgloss.Color, glyph, label string) string {
 		return lipgloss.NewStyle().Foreground(c).Render(glyph) + dimStyle.Render(" "+label)
@@ -301,7 +315,7 @@ func legendLine() string {
 // cooldown) cover every failure path; "✗" catches the `t`-test failure lines.
 var errKeywords = []string{"error", "fail", "reject", "unreachable", "blocked", "✗"}
 
-// isErrorLine reports whether line should render in red instead of dim grey.
+// isErrorLine - Reports whether line should render in red instead of dim grey.
 func isErrorLine(line string) bool {
 	l := strings.ToLower(line)
 	for _, kw := range errKeywords {
@@ -312,8 +326,8 @@ func isErrorLine(line string) bool {
 	return false
 }
 
-// renderLogs draws the log buffer inside a box of exactly w×h.
-// scroll is how many lines from the bottom have been scrolled past (0 = bottom/latest).
+// renderLogs - Draws the log buffer inside a box of exactly w×h. scroll is how
+// many lines from the bottom have been scrolled past (0 = bottom/latest).
 // focused controls whether the border is highlighted.
 func (m uiModel) renderLogs(w, h int, scroll int, focused bool) string {
 	innerW := w - 4
@@ -372,11 +386,11 @@ func (m uiModel) renderLogs(w, h int, scroll int, focused bool) string {
 	return style.Render(strings.Join(lines, "\n"))
 }
 
-// scrollbarColumn renders a trackHeight-tall vertical scrollbar for a list of
+// scrollbarColumn - Renders a trackHeight-tall vertical scrollbar for a list of
 // `total` items showing `visible` at a time, with `offset` items scrolled past
-// above the current view (0 = at the top). Each element is one column wide:
-// "█" for the thumb, "│" for the track, or " " when everything already fits
-// (no bar needed).
+// above the current view (0 = at the top). Each element is one column wide: "█"
+// for the thumb, "│" for the track, or " " when everything already fits (no bar
+// needed).
 func scrollbarColumn(total, visible, offset, trackHeight int) []string {
 	if trackHeight <= 0 {
 		return nil
@@ -409,10 +423,10 @@ func scrollbarColumn(total, visible, offset, trackHeight int) []string {
 	return col
 }
 
-// providerRows formats a provider's stat as one row per model. The first row
+// providerRows - Formats a provider's stat as one row per model. The first row
 // carries the provider name, status dot, provider-level usage figures and bar;
-// each subsequent model row shows the model name and its own token/request counts
-// and bar (scaled against the same provider quota so you can compare).
+// each subsequent model row shows the model name and its own token/request
+// counts and bar (scaled against the same provider quota so you can compare).
 func providerRows(s ProviderStat, width int) []string {
 	grey := lipgloss.NewStyle().Foreground(colGrey)
 	green := lipgloss.NewStyle().Foreground(colGreen)
@@ -525,9 +539,10 @@ func providerRows(s ProviderStat, width int) []string {
 	return rows
 }
 
-// modelRow lays out the columns to fixed widths so the table aligns. name, kind,
-// model, usage and reqs are plain text (truncated + padded — never wrapped, which
-// would break the row); the dot and tail carry their own ANSI and are placed as-is.
+// modelRow - Lays out the columns to fixed widths so the table aligns. name,
+// kind, model, usage and reqs are plain text (truncated + padded — never
+// wrapped, which would break the row); the dot and tail carry their own ANSI
+// and are placed as-is.
 func modelRow(dot, name, kind, model, usage, reqs, tail string, width int, header bool) string {
 	cell := func(s string, w int) string {
 		return padRight(truncate(s, w-1), w) // w-1 so a truncated cell keeps a 1-space column gap
@@ -541,6 +556,9 @@ func modelRow(dot, name, kind, model, usage, reqs, tail string, width int, heade
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
+// renderBar - Draws a usage bar, green until 60% of the quota window, amber to
+// 85%, red above it. pct is clamped, because a provider that reports more usage
+// than its own quota should show a full bar rather than overflow the row.
 func renderBar(pct float64, width int) string {
 	if pct < 0 {
 		pct = 0
@@ -567,8 +585,8 @@ func renderBar(pct float64, width int) string {
 	return full + empty
 }
 
-// fmtReset renders when a usage window reopens (now + remaining): a clock time
-// for a same-day reset, otherwise a dated time.
+// fmtReset - Renders when a usage window reopens (now + remaining): a clock
+// time for a same-day reset, otherwise a dated time.
 func fmtReset(left time.Duration) string {
 	t := time.Now().Add(left)
 	if left < 12*time.Hour {
@@ -577,6 +595,8 @@ func fmtReset(left time.Duration) string {
 	return t.Format("Jan 2 15:04")
 }
 
+// fmtTok - Renders a token count in the narrowest form that still reads:
+// 1.2M, 4.5k, or the number itself. The table column is fixed-width.
 func fmtTok(n int64) string {
 	switch {
 	case n >= 1_000_000:
@@ -588,7 +608,7 @@ func fmtTok(n int64) string {
 	}
 }
 
-// padRight pads s with spaces to width w (rune-aware); a no-op if s already
+// padRight - Pads s with spaces to width w (rune-aware); a no-op if s already
 // fills or exceeds w.
 func padRight(s string, w int) string {
 	if pad := w - len([]rune(s)); pad > 0 {
@@ -597,6 +617,9 @@ func padRight(s string, w int) string {
 	return s
 }
 
+// truncate - Cuts s to w columns, rune-aware, with an ellipsis where one
+// fits. Counting runes rather than bytes is what keeps a non-ASCII provider or
+// model name from tearing the table's columns apart.
 func truncate(s string, w int) string {
 	if w <= 0 {
 		return ""

@@ -87,6 +87,9 @@ type Rotator struct {
 	// costs prices requests from the config's price list. Always non-nil; it
 	// reports every model as unpriced until prices are configured.
 	costs *costTracker
+	// alerts warns before a quota runs out. Always non-nil; disabled unless a
+	// threshold is configured.
+	alerts *alerter
 	// quota is the optional top-level cap from Config.Quota, applied across every
 	// provider combined via the eventLogs[globalKey] log (see pick). Zero Quota{}
 	// (the default) means no aggregate cap.
@@ -99,7 +102,8 @@ type Rotator struct {
 // come from YAML identifiers (no "/"), and per-model keys always contain "/".
 const globalKey = "__global__"
 
-// NewRotator builds a Rotator over the configured providers and virtual model table.
+// NewRotator - Builds a Rotator over the configured providers and virtual model
+// table.
 func NewRotator(providers []Provider, models []Model) *Rotator {
 	// Start with one event log per provider (provider-level quota), plus one
 	// sentinel log accumulating every request across all providers combined,
@@ -145,21 +149,23 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		health:        map[string]Health{},
 		reason:        map[string]string{},
 		costs:         newCostTracker(Pricing{}),
+		alerts:        newAlerter(AlertConfig{}),
 		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
-// setHealth records a provider's liveness (from the boot probe or a live request).
+// setHealth - Records a provider's liveness (from the boot probe or a live
+// request).
 func (r *Rotator) setHealth(name string, h Health) {
 	r.mu.Lock()
 	r.health[name] = h
 	r.mu.Unlock()
 }
 
-// recordUsage appends a request event (with token count) to the provider's event
-// log and, when a per-model event log exists (backend declared its own quota),
-// also records to that. Updates the per-model sub-counters for the dashboard.
-// tokens may be 0 when the upstream didn't report usage.
+// recordUsage - Appends a request event (with token count) to the provider's
+// event log and, when a per-model event log exists (backend declared its own
+// quota), also records to that. Updates the per-model sub-counters for the
+// dashboard. tokens may be 0 when the upstream didn't report usage.
 func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	r.mu.Lock()
 	if el, ok := r.eventLogs[name]; ok {
@@ -175,6 +181,9 @@ func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	r.modelTokens[mk] += tokens
 	r.dirty = true
 	r.mu.Unlock()
+	// After the counters move, not before: the check reads the same totals the
+	// rate limiter does, so it must see this request.
+	r.checkBudgets(time.Now())
 }
 
 // ModelStat is the per-model usage snapshot embedded in ProviderStat.
@@ -208,8 +217,8 @@ type ProviderStat struct {
 	Inactive bool
 }
 
-// Snapshot returns the current per-provider stats (all configured providers, in
-// order) for rendering. Safe to call concurrently with request handling.
+// Snapshot - Returns the current per-provider stats (all configured providers,
+// in order) for rendering. Safe to call concurrently with request handling.
 func (r *Rotator) Snapshot() []ProviderStat {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -271,7 +280,7 @@ func (r *Rotator) Snapshot() []ProviderStat {
 	return out
 }
 
-// DailyTotals sums every active provider's dailyTotals() (since UTC midnight)
+// DailyTotals - Sums every active provider's dailyTotals() (since UTC midnight)
 // for the dashboard's aggregate usage line. It uses each provider's own
 // eventLog directly rather than Snapshot()'s per-quota-window totals, since
 // providers may use different quota windows (daily/hourly/minutely/none) —
@@ -295,13 +304,13 @@ func (r *Rotator) DailyTotals() (requests int, tokens int64, activeProviders int
 	return
 }
 
-// VirtualModelIDs returns the IDs of the virtual models a request could actually
-// be served by, in config order. A model every one of whose backends is greyed
-// out — key rejected, tool logged out, CLI binary not installed, endpoint
-// unreachable — is left out: listing it only gets a caller to pick it and take a
-// 502/503, since nothing in the listing said it was dead. Cooldown is NOT a
-// reason to hide a model: that's a rate limit which reopens on its own, and the
-// entry would flap in and out of the list.
+// VirtualModelIDs - Returns the IDs of the virtual models a request could
+// actually be served by, in config order. A model every one of whose backends
+// is greyed out — key rejected, tool logged out, CLI binary not installed,
+// endpoint unreachable — is left out: listing it only gets a caller to pick it
+// and take a 502/503, since nothing in the listing said it was dead. Cooldown
+// is NOT a reason to hide a model: that's a rate limit which reopens on its
+// own, and the entry would flap in and out of the list.
 //
 // Used by the /v1/models handler.
 func (r *Rotator) VirtualModelIDs() []string {
@@ -314,11 +323,12 @@ func (r *Rotator) VirtualModelIDs() []string {
 	return ids
 }
 
-// servable reports whether any provider backing a virtual model is currently in
-// a state that could answer. A provider never probed (HealthUnknown) counts as
-// servable — unproven is not the same as broken — and a model with no candidate
-// providers at all is left alone: that's a config gap, not a probe result, and
-// hiding it would just make a mistyped backend name look like an outage.
+// servable - Reports whether any provider backing a virtual model is currently
+// in a state that could answer. A provider never probed (HealthUnknown) counts
+// as servable — unproven is not the same as broken — and a model with no
+// candidate providers at all is left alone: that's a config gap, not a probe
+// result, and hiding it would just make a mistyped backend name look like an
+// outage.
 func (r *Rotator) servable(id string) bool {
 	providers, _ := r.activeForModel(id)
 	if len(providers) == 0 {
@@ -334,12 +344,12 @@ func (r *Rotator) servable(id string) bool {
 	return false
 }
 
-// activeForModel returns the subset of active providers that back a named virtual
-// model, each trimmed to only the backend model(s) listed for that virtual model,
-// plus the load-balancing strategy configured on that virtual model. For
-// "chicco:auto" (or when the requested model doesn't match any virtual model) it
-// returns all active providers unchanged and the "order" (config order) strategy,
-// since there's no virtual model to carry one.
+// activeForModel - Returns the subset of active providers that back a named
+// virtual model, each trimmed to only the backend model(s) listed for that
+// virtual model, plus the load-balancing strategy configured on that virtual
+// model. For "chicco:auto" (or when the requested model doesn't match any
+// virtual model) it returns all active providers unchanged and the "order"
+// (config order) strategy, since there's no virtual model to carry one.
 func (r *Rotator) activeForModel(requested string) (providers []Provider, strategy string) {
 	all := r.Active()
 	if requested == "chicco:auto" || requested == "" {
@@ -384,8 +394,8 @@ func (r *Rotator) activeForModel(requested string) (providers []Provider, strate
 	return out, vm.Strategy
 }
 
-// isActive reports whether p is usable for routing: it needs at least one model,
-// and — unless it's a CLI provider, which authenticates itself (login /
+// isActive - Reports whether p is usable for routing: it needs at least one
+// model, and — unless it's a CLI provider, which authenticates itself (login /
 // credential file) — a non-empty api_key.
 func (p Provider) isActive() bool {
 	if len(p.Models) == 0 {
@@ -394,7 +404,7 @@ func (p Provider) isActive() bool {
 	return p.Kind == "cli" || strings.TrimSpace(p.APIKey) != ""
 }
 
-// Active returns the providers usable for routing (see Provider.isActive). It
+// Active - Returns the providers usable for routing (see Provider.isActive). It
 // locks r.mu because Reload can swap r.providers concurrently with a live
 // request.
 func (r *Rotator) Active() []Provider {
@@ -409,16 +419,15 @@ func (r *Rotator) Active() []Provider {
 	return out
 }
 
-// pick returns the first provider not in cooldown — in the order set by the
-// requested virtual model's load-balancing strategy ("order", config order, when
-// the request doesn't match a virtual model) — and its next model. ok is false
-// when every active provider is blocked.
-// It also enforces client-side rate limits (RPM/RPH/RPD/TPM/TPH/TPD): if the
-// event log shows a limit would be breached, the provider is put in cooldown
-// until the oldest event in that window expires.
-// When a backend has a per-model quota, that quota is checked against the
-// per-model event log (keyed "provider/model") instead of the provider-level one,
-// giving each model its own independent rate-limit window.
+// pick - Returns the first provider not in cooldown — in the order set by the
+// requested virtual model's load-balancing strategy ("order", config order,
+// when the request doesn't match a virtual model) — and its next model. ok is
+// false when every active provider is blocked. It also enforces client-side
+// rate limits (RPM/RPH/RPD/TPM/TPH/TPD): if the event log shows a limit would
+// be breached, the provider is put in cooldown until the oldest event in that
+// window expires. When a backend has a per-model quota, that quota is checked
+// against the per-model event log (keyed "provider/model") instead of the
+// provider-level one, giving each model its own independent rate-limit window.
 func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -490,8 +499,9 @@ func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bo
 	return Provider{}, "", false
 }
 
-// order returns the active providers in the sequence pick should try them, per the
-// requested virtual model's load-balancing strategy. The caller must hold r.mu.
+// order - Returns the active providers in the sequence pick should try them,
+// per the requested virtual model's load-balancing strategy. The caller must
+// hold r.mu.
 //   - "" / "order":  config order — the top provider is drained (used until it is
 //     rate-limited into cooldown), then the request falls through to
 //     the next, so a free tier is spent before the fallback. Default.
@@ -528,9 +538,9 @@ func (r *Rotator) order(active []Provider, strategy string) []Provider {
 	}
 }
 
-// weightedOrder returns a random permutation of active biased by provider weight:
-// it repeatedly draws the next provider with probability proportional to its weight
-// among those not yet placed. The caller must hold r.mu.
+// weightedOrder - Returns a random permutation of active biased by provider
+// weight: it repeatedly draws the next provider with probability proportional
+// to its weight among those not yet placed. The caller must hold r.mu.
 func (r *Rotator) weightedOrder(active []Provider) []Provider {
 	pool := append([]Provider(nil), active...)
 	out := make([]Provider, 0, len(pool))
@@ -553,8 +563,8 @@ func (r *Rotator) weightedOrder(active []Provider) []Provider {
 	return out
 }
 
-// providerWeight is a provider's load-balancing weight, defaulting an unset/0 weight
-// to 1 so every provider participates.
+// providerWeight - Is a provider's load-balancing weight, defaulting an unset/0
+// weight to 1 so every provider participates.
 func providerWeight(p Provider) int {
 	if p.Weight > 0 {
 		return p.Weight
@@ -562,9 +572,9 @@ func providerWeight(p Provider) int {
 	return 1
 }
 
-// block puts a provider in cooldown until now+d, recording why ("limit" = usage
-// window exhausted, "auth", "error"). The reason drives the dashboard label and is
-// persisted so a long window limit survives a restart.
+// block - Puts a provider in cooldown until now+d, recording why ("limit" =
+// usage window exhausted, "auth", "error"). The reason drives the dashboard
+// label and is persisted so a long window limit survives a restart.
 func (r *Rotator) block(name string, d time.Duration, reason string) {
 	r.mu.Lock()
 	r.blocked[name] = time.Now().Add(d)
@@ -573,13 +583,13 @@ func (r *Rotator) block(name string, d time.Duration, reason string) {
 	r.mu.Unlock()
 }
 
-// isAuth reports whether a status means the key was rejected (401/403), as
+// isAuth - Reports whether a status means the key was rejected (401/403), as
 // opposed to a rate-limit or transient failure.
 func isAuth(status int) bool {
 	return status == http.StatusUnauthorized || status == http.StatusForbidden
 }
 
-// blockReason maps an upstream status to a cooldown reason for the dashboard.
+// blockReason - Maps an upstream status to a cooldown reason for the dashboard.
 func blockReason(status int) string {
 	switch {
 	case isAuth(status):
@@ -591,10 +601,11 @@ func blockReason(status int) string {
 	}
 }
 
-// isRequestError reports whether a status means the request itself was rejected
-// (bad body, unknown model, payload too large) rather than the provider being
-// unhealthy or rate-limited. Waiting won't help these, and they say nothing about
-// whether the next request would succeed — so they get only a brief cooldown.
+// isRequestError - Reports whether a status means the request itself was
+// rejected (bad body, unknown model, payload too large) rather than the
+// provider being unhealthy or rate-limited. Waiting won't help these, and they
+// say nothing about whether the next request would succeed — so they get only a
+// brief cooldown.
 func isRequestError(status int) bool {
 	switch status {
 	case http.StatusBadRequest, http.StatusNotFound,
@@ -604,9 +615,10 @@ func isRequestError(status int) bool {
 	return false
 }
 
-// cooldown picks how long to skip a provider after a failure: a rejected key for
-// an hour, a brief skip for a request-shaped 4xx (the payload was at fault, not
-// the provider), an explicit Retry-After when given, otherwise a short default.
+// cooldown - Picks how long to skip a provider after a failure: a rejected key
+// for an hour, a brief skip for a request-shaped 4xx (the payload was at fault,
+// not the provider), an explicit Retry-After when given, otherwise a short
+// default.
 func cooldown(status int, retryAfter time.Duration) time.Duration {
 	if isAuth(status) {
 		return authCooldown
@@ -644,10 +656,10 @@ type upstreamClass struct {
 	modelScoped bool // block "provider/model", leaving sibling models routable
 }
 
-// classifyUpstream decides that, from the status, the Retry-After header and the
-// error body. Body text is only ever used to make a verdict LESS severe than the
-// status alone would imply, so a provider that says nothing useful behaves
-// exactly as before.
+// classifyUpstream - Decides that, from the status, the Retry-After header and
+// the error body. Body text is only ever used to make a verdict LESS severe
+// than the status alone would imply, so a provider that says nothing useful
+// behaves exactly as before.
 func classifyUpstream(status int, body string, retryAfter time.Duration) upstreamClass {
 	// Quota wording is checked FIRST and stays provider-wide: an exhausted account
 	// affects every model on it, and such messages often mention "model" too
@@ -668,7 +680,7 @@ func classifyUpstream(status int, body string, retryAfter time.Duration) upstrea
 	return upstreamClass{blockReason(status), cooldown(status, retryAfter), false}
 }
 
-// parseRetryAfter reads a Retry-After header (delta-seconds form) into a
+// parseRetryAfter - Reads a Retry-After header (delta-seconds form) into a
 // duration; 0 when absent or not a plain number.
 func parseRetryAfter(h string) time.Duration {
 	if secs, err := strconv.Atoi(strings.TrimSpace(h)); err == nil && secs > 0 {
@@ -677,7 +689,7 @@ func parseRetryAfter(h string) time.Duration {
 	return 0
 }
 
-// Handler returns the HTTP handler: /v1/chat/completions is rotated across
+// Handler - Returns the HTTP handler: /v1/chat/completions is rotated across
 // providers; /v1/messages is the same rotation in Anthropic's wire format;
 // /v1/models lists available virtual models; /health is a liveness probe;
 // /v1/status exposes a JSON snapshot for the web dashboard; /dashboard serves
@@ -695,12 +707,13 @@ func Handler(r *Rotator, logs *logBuffer) http.Handler {
 	return r.withAuth(mux)
 }
 
-// withAuth guards every endpoint except /health with the optional shared secret
-// (top-level api_key in chicco.yaml). With no key configured chicco stays open, as
-// before — fine on 127.0.0.1. Set a key when binding a public addr so only callers
-// presenting `Authorization: Bearer <key>` get through. /health is always open so
-// liveness probes need no secret. The key is read per request (under r.mu) so a
-// SIGHUP reload can add, change, or remove it without a restart.
+// withAuth - Guards every endpoint except /health with the optional shared
+// secret (top-level api_key in chicco.yaml). With no key configured chicco
+// stays open, as before — fine on 127.0.0.1. Set a key when binding a public
+// addr so only callers presenting `Authorization: Bearer <key>` get through.
+// /health is always open so liveness probes need no secret. The key is read per
+// request (under r.mu) so a SIGHUP reload can add, change, or remove it without
+// a restart.
 func (r *Rotator) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if key := r.currentAuthKey(); key != "" && req.URL.Path != "/health" &&
@@ -712,16 +725,17 @@ func (r *Rotator) withAuth(next http.Handler) http.Handler {
 	})
 }
 
-// currentAuthKey returns the inbound shared secret under r.mu, so a reload writing
-// it doesn't race the auth check reading it.
+// currentAuthKey - Returns the inbound shared secret under r.mu, so a reload
+// writing it doesn't race the auth check reading it.
 func (r *Rotator) currentAuthKey() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.authKey
 }
 
-// bearerMatches reports whether an Authorization header carries the expected
-// bearer token, compared in constant time so a wrong key leaks no timing signal.
+// bearerMatches - Reports whether an Authorization header carries the expected
+// bearer token, compared in constant time so a wrong key leaks no timing
+// signal.
 func bearerMatches(header, key string) bool {
 	const prefix = "Bearer "
 	if !strings.HasPrefix(header, prefix) {
@@ -731,7 +745,7 @@ func bearerMatches(header, key string) bool {
 	return subtle.ConstantTimeCompare([]byte(got), []byte(key)) == 1
 }
 
-// healthStr renders a Health for the JSON APIs (/health, /v1/status) and the
+// healthStr - Renders a Health for the JSON APIs (/health, /v1/status) and the
 // dashboard, which colour on these four strings.
 func healthStr(h Health) string {
 	switch h {
@@ -746,13 +760,14 @@ func healthStr(h Health) string {
 	}
 }
 
-// handleHealth serves GET /health. The status stays 200 whatever the providers
-// are doing — the Helm chart points both the liveness AND the readiness probe
-// here, so failing it on a provider outage would restart a proxy that is running
-// perfectly well. The body is what changed: an empty 200 said nothing about
-// whether anything could actually serve a request, so a provider whose CLI isn't
-// installed or whose key is rejected looked exactly as healthy as a working one.
-// "degraded" means every provider is greyed out or in cooldown right now.
+// handleHealth - Serves GET /health. The status stays 200 whatever the
+// providers are doing — the Helm chart points both the liveness AND the
+// readiness probe here, so failing it on a provider outage would restart a
+// proxy that is running perfectly well. The body is what changed: an empty 200
+// said nothing about whether anything could actually serve a request, so a
+// provider whose CLI isn't installed or whose key is rejected looked exactly as
+// healthy as a working one. "degraded" means every provider is greyed out or in
+// cooldown right now.
 func (r *Rotator) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	providers := map[string]string{}
 	ready := 0
@@ -777,9 +792,9 @@ func (r *Rotator) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "providers": providers})
 }
 
-// handleStatus returns a handler that serves GET /v1/status as JSON containing
-// the current provider snapshot and the most recent log lines. It is the data
-// source polled by the web dashboard.
+// handleStatus - Returns a handler that serves GET /v1/status as JSON
+// containing the current provider snapshot and the most recent log lines. It is
+// the data source polled by the web dashboard.
 func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
@@ -866,9 +881,10 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 	}
 }
 
-// handleModels serves GET /v1/models in the OpenAI format: an object list of
+// handleModels - Serves GET /v1/models in the OpenAI format: an object list of
 // model descriptors. It includes one entry per virtual model defined in the
-// routing table plus the catch-all "chicco:auto" that rotates across everything.
+// routing table plus the catch-all "chicco:auto" that rotates across
+// everything.
 func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -892,12 +908,12 @@ func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data})
 }
 
-// handleChat forwards one chat-completion request, overriding the model with the
-// rotation's pick and retrying the next provider on any quota/auth/transient
-// failure until one answers (its response is streamed straight back) or all are
-// exhausted. The rotation only fails over on the upstream's initial status, which
-// is where quota/auth errors surface — once a 2xx body starts streaming to the
-// client there is no rewinding it.
+// handleChat - Forwards one chat-completion request, overriding the model with
+// the rotation's pick and retrying the next provider on any
+// quota/auth/transient failure until one answers (its response is streamed
+// straight back) or all are exhausted. The rotation only fails over on the
+// upstream's initial status, which is where quota/auth errors surface — once a
+// 2xx body starts streaming to the client there is no rewinding it.
 func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -935,10 +951,11 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		res.provider, res.model, usage.Total, r.costNote(res.provider, res.model, usage))
 }
 
-// handleEmbeddings forwards one embeddings request the same way handleChat forwards
-// a chat completion — rotation, cooldown and quota bookkeeping all go through the
-// shared dispatch(). Embeddings responses are a single JSON object, never streamed,
-// so unlike handleChat this reads the upstream body fully and relays it verbatim.
+// handleEmbeddings - Forwards one embeddings request the same way handleChat
+// forwards a chat completion — rotation, cooldown and quota bookkeeping all go
+// through the shared dispatch(). Embeddings responses are a single JSON object,
+// never streamed, so unlike handleChat this reads the upstream body fully and
+// relays it verbatim.
 func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1003,9 +1020,11 @@ type dispatchError struct {
 	msg    string
 }
 
+// Error - Returns the message alone. The status travels beside it and is read
+// with dispatchStatus, so it never leaks into text a caller might display.
 func (e *dispatchError) Error() string { return e.msg }
 
-// dispatchStatus returns the HTTP status a dispatch error should be reported
+// dispatchStatus - Returns the HTTP status a dispatch error should be reported
 // with, defaulting to 503 for anything that isn't a *dispatchError.
 func dispatchStatus(err error) int {
 	var de *dispatchError
@@ -1015,7 +1034,7 @@ func dispatchStatus(err error) int {
 	return http.StatusServiceUnavailable
 }
 
-// dispatch resolves the active provider set for requestedModel, then walks
+// dispatch - Resolves the active provider set for requestedModel, then walks
 // pick() — retrying on transport errors and non-2xx status, applying the same
 // cooldown/health/quota bookkeeping handleChat always has — until one provider
 // answers with a 2xx or every candidate is exhausted/blocked. It mutates
@@ -1023,7 +1042,8 @@ func dispatchStatus(err error) int {
 // pass a payload already shaped for upstreamPath (OpenAI chat-completions for
 // "/chat/completions", OpenAI embeddings for "/embeddings"). Shared by
 // handleChat, handleMessages and handleEmbeddings so failover/cooldown/quota
-// logic lives in exactly one place regardless of which wire format the caller used.
+// logic lives in exactly one place regardless of which wire format the caller
+// used.
 func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload map[string]any, upstreamPath string) (*dispatchResult, error) {
 	// Determine which subset of providers to route to based on the requested model.
 	// "chicco:auto" or an unknown model routes across all active providers.
@@ -1115,7 +1135,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 	return nil, &dispatchError{http.StatusServiceUnavailable, "chicco: all providers exhausted: " + lastErr}
 }
 
-// blockedSummary describes why each candidate was skipped, for the 503 body.
+// blockedSummary - Describes why each candidate was skipped, for the 503 body.
 func (r *Rotator) blockedSummary(active []Provider) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1154,10 +1174,11 @@ type upstream struct {
 	body        io.ReadCloser
 }
 
-// forward POSTs body to a provider's base URL + path (e.g. "/chat/completions",
-// "/embeddings"), carrying its bearer token and propagating the caller's context
-// so a client cancel tears down the upstream request. The client has no timeout:
-// long streamed generations are bounded by the caller's context, not a deadline.
+// forward - POSTs body to a provider's base URL + path (e.g.
+// "/chat/completions", "/embeddings"), carrying its bearer token and
+// propagating the caller's context so a client cancel tears down the upstream
+// request. The client has no timeout: long streamed generations are bounded by
+// the caller's context, not a deadline.
 func forward(ctx context.Context, p Provider, body []byte, path string) (*upstream, error) {
 	url := strings.TrimRight(p.BaseURL, "/") + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
@@ -1178,10 +1199,10 @@ func forward(ctx context.Context, p Provider, body []byte, path string) (*upstre
 	}, nil
 }
 
-// stream copies the upstream reply to the client line by line, flushing after each
-// chunk so Server-Sent Event deltas arrive promptly, and returns the token count
-// reported in the usage field (0 if none). Forwarding is byte-exact — ReadBytes
-// keeps the newline — so the proxy stays transparent.
+// stream - Copies the upstream reply to the client line by line, flushing after
+// each chunk so Server-Sent Event deltas arrive promptly, and returns the token
+// count reported in the usage field (0 if none). Forwarding is byte-exact —
+// ReadBytes keeps the newline — so the proxy stays transparent.
 func stream(w http.ResponseWriter, up *upstream) Usage {
 	defer up.body.Close()
 	if up.contentType != "" {
@@ -1212,7 +1233,7 @@ func stream(w http.ResponseWriter, up *upstream) Usage {
 	}
 }
 
-// usageTokens extracts usage.total_tokens from one response line — an SSE
+// usageTokens - Extracts usage.total_tokens from one response line — an SSE
 // "data: {...}" event or a whole non-streamed JSON body — returning 0 when the
 // line carries no usage object.
 func usageTokens(line []byte) int64 {
@@ -1266,8 +1287,8 @@ func usageSplit(line []byte) Usage {
 	return u
 }
 
-// writeError replies with an OpenAI-style error envelope so a client parsing the
-// standard shape surfaces a useful message.
+// writeError - Replies with an OpenAI-style error envelope so a client parsing
+// the standard shape surfaces a useful message.
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
