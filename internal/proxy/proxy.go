@@ -84,6 +84,9 @@ type Rotator struct {
 	// needs no separate lock).
 	rrCursor int
 	rng      *rand.Rand
+	// costs prices requests from the config's price list. Always non-nil; it
+	// reports every model as unpriced until prices are configured.
+	costs *costTracker
 	// alerts warns before a quota runs out. Always non-nil; disabled unless a
 	// threshold is configured.
 	alerts *alerter
@@ -145,6 +148,7 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		modelRequests: map[string]int{},
 		health:        map[string]Health{},
 		reason:        map[string]string{},
+		costs:         newCostTracker(Pricing{}),
 		alerts:        newAlerter(AlertConfig{}),
 		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -869,6 +873,10 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 			"requests_today":   reqToday,
 			"tokens_today":     tokToday,
 			"active_providers": activeN,
+			// Session spend. Carries its own currency label and its unpriced
+			// counts, so a dashboard cannot render the total as the whole bill
+			// when part of the traffic could not be priced.
+			"cost": r.CostSummary(),
 		})
 	}
 }
@@ -937,9 +945,10 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 		writeError(w, dispatchStatus(err), err.Error())
 		return
 	}
-	tokens := stream(w, res.up)
-	r.recordUsage(res.provider, res.model, tokens)
-	log.Printf("chicco: %s (%s) served %d tokens", res.provider, res.model, tokens)
+	usage := stream(w, res.up)
+	r.recordUsage(res.provider, res.model, usage.Total)
+	log.Printf("chicco: %s (%s) served %d tokens%s",
+		res.provider, res.model, usage.Total, r.costNote(res.provider, res.model, usage))
 }
 
 // handleEmbeddings - Forwards one embeddings request the same way handleChat
@@ -982,7 +991,9 @@ func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
 	}
 	_ = json.Unmarshal(respBody, &parsed)
 	r.recordUsage(res.provider, res.model, parsed.Usage.TotalTokens)
-	log.Printf("chicco: %s (%s) served embeddings, %d tokens", res.provider, res.model, parsed.Usage.TotalTokens)
+	log.Printf("chicco: %s (%s) served embeddings, %d tokens%s", res.provider, res.model,
+		parsed.Usage.TotalTokens,
+		r.costNote(res.provider, res.model, Usage{Total: parsed.Usage.TotalTokens, Prompt: parsed.Usage.TotalTokens}))
 
 	contentType := res.up.contentType
 	if contentType == "" {
@@ -1192,7 +1203,7 @@ func forward(ctx context.Context, p Provider, body []byte, path string) (*upstre
 // each chunk so Server-Sent Event deltas arrive promptly, and returns the token
 // count reported in the usage field (0 if none). Forwarding is byte-exact —
 // ReadBytes keeps the newline — so the proxy stays transparent.
-func stream(w http.ResponseWriter, up *upstream) int64 {
+func stream(w http.ResponseWriter, up *upstream) Usage {
 	defer up.body.Close()
 	if up.contentType != "" {
 		w.Header().Set("Content-Type", up.contentType)
@@ -1202,22 +1213,22 @@ func stream(w http.ResponseWriter, up *upstream) int64 {
 	// Lines can be large (a whole non-streamed JSON body, or one SSE event), so
 	// give the reader a generous buffer.
 	br := bufio.NewReaderSize(up.body, 1024*1024)
-	var tokens int64
+	var usage Usage
 	for {
 		line, rerr := br.ReadBytes('\n')
 		if len(line) > 0 {
 			if _, werr := w.Write(line); werr != nil {
-				return tokens
+				return usage
 			}
 			if flusher != nil {
 				flusher.Flush()
 			}
-			if t := usageTokens(line); t > 0 {
-				tokens = t // the final usage chunk wins
+			if u := usageSplit(line); u.Total > 0 {
+				usage = u // the final usage chunk wins
 			}
 		}
 		if rerr != nil {
-			return tokens
+			return usage
 		}
 	}
 }
@@ -1226,21 +1237,54 @@ func stream(w http.ResponseWriter, up *upstream) int64 {
 // "data: {...}" event or a whole non-streamed JSON body — returning 0 when the
 // line carries no usage object.
 func usageTokens(line []byte) int64 {
+	return usageSplit(line).Total
+}
+
+// Usage is the token split a price needs. Input and output are billed at
+// different rates everywhere, often by a factor of three or four, so a cost
+// computed from the total alone is wrong by whatever the request's shape
+// happened to be.
+type Usage struct {
+	Total      int64
+	Prompt     int64
+	Completion int64
+}
+
+// usageSplit extracts the usage object from one response line — an SSE
+// "data: {...}" event or a whole non-streamed JSON body — returning a zero
+// Usage when the line carries none.
+func usageSplit(line []byte) Usage {
 	data := bytes.TrimSpace(line)
 	data = bytes.TrimPrefix(data, []byte("data:"))
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 || data[0] != '{' {
-		return 0
+		return Usage{}
 	}
 	var env struct {
 		Usage struct {
-			TotalTokens int64 `json:"total_tokens"`
+			TotalTokens      int64 `json:"total_tokens"`
+			PromptTokens     int64 `json:"prompt_tokens"`
+			CompletionTokens int64 `json:"completion_tokens"`
+			// Anthropic's own shape, for a provider that answers in it.
+			InputTokens  int64 `json:"input_tokens"`
+			OutputTokens int64 `json:"output_tokens"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(data, &env); err != nil {
-		return 0
+		return Usage{}
 	}
-	return env.Usage.TotalTokens
+	u := Usage{
+		Total:      env.Usage.TotalTokens,
+		Prompt:     env.Usage.PromptTokens,
+		Completion: env.Usage.CompletionTokens,
+	}
+	if u.Prompt == 0 && u.Completion == 0 {
+		u.Prompt, u.Completion = env.Usage.InputTokens, env.Usage.OutputTokens
+	}
+	if u.Total == 0 {
+		u.Total = u.Prompt + u.Completion
+	}
+	return u
 }
 
 // writeError - Replies with an OpenAI-style error envelope so a client parsing

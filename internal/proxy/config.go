@@ -31,6 +31,9 @@ type Config struct {
 	// have, since its whole point is to drain one provider's quota and fall
 	// through to the next. Zero value (the default) means no aggregate cap.
 	Quota Quota `yaml:"quota"`
+	// Pricing turns the token counters into money. Optional: with no prices
+	// configured, every request reports as unpriced rather than as free.
+	Pricing Pricing `yaml:"pricing"`
 	// Alerts warns when a provider approaches its quota, instead of the
 	// exhaustion being discovered when requests start failing.
 	Alerts AlertConfig `yaml:"alerts"`
@@ -44,6 +47,7 @@ type rawConfig struct {
 	Providers yaml.Node   `yaml:"providers"`
 	Models    []Model     `yaml:"models"`
 	Quota     Quota       `yaml:"quota"`
+	Pricing   Pricing     `yaml:"pricing"`
 	Alerts    AlertConfig `yaml:"alerts"`
 }
 
@@ -60,6 +64,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.APIKey = raw.APIKey
 	c.Models = raw.Models
 	c.Quota = raw.Quota
+	c.Pricing = raw.Pricing
 	c.Alerts = raw.Alerts
 
 	n := &raw.Providers

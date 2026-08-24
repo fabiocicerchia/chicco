@@ -167,6 +167,25 @@ models:
       - provider: cerebras
         model: zai-glm-4.7
 
+# pricing: (optional) what each model costs, so the token counters become
+# money. Per MILLION tokens, input and output separately — that is the unit
+# every published price list uses, and they differ by 3-4x, so a cost computed
+# from a total is wrong by whatever shape the request had. currency is a label:
+# chicco does no conversion, it only reports the unit you wrote.
+#
+# A model with no entry here is reported as UNPRICED, never as free — a zero
+# entry is how you say "this free tier costs nothing", which is a different
+# statement. Totals carry their unpriced counts so an incomplete bill is
+# visibly incomplete.
+# pricing:
+#   currency: USD
+#   models:
+#     gpt-4o-mini:
+#       input_per_million: 0.15
+#       output_per_million: 0.60
+#     llama-3.3-70b:
+#       input_per_million: 0
+#       output_per_million: 0
 # alerts: (optional) warn before a quota runs out, instead of discovering it
 # when requests start failing. threshold_percent is a share of each provider's
 # own quota; 0 (the default) disables alerting. The log line is emitted either
