@@ -36,6 +36,10 @@ type testResult struct {
 	errMsg     string
 }
 
+// runTest - Sends one real request to every active provider and logs what came
+// back. Single-flight: a second run while one is in progress is refused rather
+// than queued, since the point is a quick answer to "is my config live", not a
+// load test.
 func runTest(rot *Rotator) {
 	if !testRunning.CompareAndSwap(false, true) {
 		log.Printf("chicco test: a test run is already in progress")
@@ -76,7 +80,8 @@ func runTest(rot *Rotator) {
 	log.Printf("chicco test: done — %d/%d model(s) responded", ok, total)
 }
 
-// testOne sends the hello-world prompt to one provider/model and reports the outcome.
+// testOne - Sends the hello-world prompt to one provider/model and reports the
+// outcome.
 func testOne(ctx context.Context, p Provider, model string) testResult {
 	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -105,8 +110,8 @@ func testOne(ctx context.Context, p Provider, model string) testResult {
 	return testResult{ok: true, text: text, tokens: tokens}
 }
 
-// drainCompletion reads a non-streamed JSON body or synthesized SSE and returns the
-// reply text and any reported token count.
+// drainCompletion - Reads a non-streamed JSON body or synthesized SSE and
+// returns the reply text and any reported token count.
 func drainCompletion(up *upstream) (string, int64) {
 	defer up.body.Close()
 	var content strings.Builder
@@ -127,7 +132,7 @@ func drainCompletion(up *upstream) (string, int64) {
 	return strings.TrimSpace(content.String()), tokens
 }
 
-// contentDelta extracts assistant text from one response line — a streamed
+// contentDelta - Extracts assistant text from one response line — a streamed
 // delta.content or a non-streamed message.content.
 func contentDelta(line []byte) string {
 	data := bytes.TrimSpace(bytes.TrimPrefix(bytes.TrimSpace(line), []byte("data:")))
@@ -149,7 +154,7 @@ func contentDelta(line []byte) string {
 	return c.Choices[0].Message.Content
 }
 
-// failDetail summarises why a model didn't answer (single line).
+// failDetail - Summarises why a model didn't answer (single line).
 func failDetail(res testResult) string {
 	switch blockReason(res.status) {
 	case "auth":
@@ -164,8 +169,8 @@ func failDetail(res testResult) string {
 	}
 }
 
-// windowDesc describes a provider's quota window after the test: current usage vs
-// quota, the limit reset, or "no quota" for subscription tools.
+// windowDesc - Describes a provider's quota window after the test: current
+// usage vs quota, the limit reset, or "no quota" for subscription tools.
 func windowDesc(p Provider, rot *Rotator) string {
 	var stat ProviderStat
 	for _, s := range rot.Snapshot() {
