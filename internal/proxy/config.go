@@ -36,6 +36,9 @@ type Config struct {
 	// what an agent runner points at, and a scrape endpoint is a different
 	// audience with a different exposure.
 	Metrics MetricsConfig `yaml:"metrics"`
+	// Pricing turns the token counters into money. Optional: with no prices
+	// configured, every request reports as unpriced rather than as free.
+	Pricing Pricing `yaml:"pricing"`
 	// Alerts warns when a provider approaches its quota, instead of the
 	// exhaustion being discovered when requests start failing.
 	Alerts AlertConfig `yaml:"alerts"`
@@ -61,6 +64,7 @@ type rawConfig struct {
 	Models    []Model       `yaml:"models"`
 	Quota     Quota         `yaml:"quota"`
 	Metrics   MetricsConfig `yaml:"metrics"`
+	Pricing   Pricing       `yaml:"pricing"`
 	Alerts    AlertConfig   `yaml:"alerts"`
 }
 
@@ -81,6 +85,7 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	if c.Metrics.Enabled && c.Metrics.Addr == "" {
 		c.Metrics.Addr = DefaultMetricsAddr
 	}
+	c.Pricing = raw.Pricing
 	c.Alerts = raw.Alerts
 
 	n := &raw.Providers
