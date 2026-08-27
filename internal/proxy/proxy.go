@@ -160,7 +160,9 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		metrics:       newMetrics(),
 		costs:         newCostTracker(Pricing{}),
 		alerts:        newAlerter(AlertConfig{}),
-		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
+		// Weighted provider pick and tie shuffle only — nothing here is a secret,
+		// a token or a nonce, so math/rand is the right tool. //nolint:gosec
+		rng: rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec // load balancing, not security
 	}
 }
 
@@ -1164,7 +1166,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		if up.status < 200 || up.status >= 300 {
 			r.metrics.observeError(p.Name, strconv.Itoa(up.status), took)
 			snippet, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
-			up.body.Close()
+			_ = up.body.Close()
 			text := strings.TrimSpace(string(snippet))
 			cls := classifyUpstream(up.status, text, up.retryAfter)
 			key := p.Name
