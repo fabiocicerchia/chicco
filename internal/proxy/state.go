@@ -101,8 +101,13 @@ func (r *Rotator) Persist() error {
 		return err
 	}
 	// Write-then-rename so a crash mid-write can't truncate the existing file.
+	//
+	// 0600, not 0644: the file records which providers and models this host
+	// talks to, how much it spends against each quota, and the upstream reason
+	// each cooldown fired. That is a usage profile of the operator's API keys —
+	// nothing another local user needs to read.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
