@@ -63,15 +63,15 @@ const DefaultMetricsAddr = "127.0.0.1:41987"
 // rawConfig is the intermediate shape used during YAML decoding. providers is
 // kept as a raw yaml.Node so we can detect list vs. map and preserve order.
 type rawConfig struct {
-	Addr      string        `yaml:"addr"`
-	APIKey    string        `yaml:"api_key"`
-	Providers yaml.Node     `yaml:"providers"`
-	Models    []Model       `yaml:"models"`
-	Quota     Quota         `yaml:"quota"`
+	Addr      string            `yaml:"addr"`
+	APIKey    string            `yaml:"api_key"`
+	Providers yaml.Node         `yaml:"providers"`
+	Models    []Model           `yaml:"models"`
+	Quota     Quota             `yaml:"quota"`
 	Aliases   map[string]string `yaml:"aliases"`
-	Metrics   MetricsConfig `yaml:"metrics"`
-	Pricing   Pricing       `yaml:"pricing"`
-	Alerts    AlertConfig   `yaml:"alerts"`
+	Metrics   MetricsConfig     `yaml:"metrics"`
+	Pricing   Pricing           `yaml:"pricing"`
+	Alerts    AlertConfig       `yaml:"alerts"`
 }
 
 // UnmarshalYAML - Lets Config accept providers as either a YAML sequence (list

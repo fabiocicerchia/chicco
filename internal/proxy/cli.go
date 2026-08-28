@@ -187,7 +187,8 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 			return nil, fmt.Errorf("temp file: %w", err)
 		}
 		outFile = f.Name()
-		f.Close()
+		// Only the name is wanted; the CLI reopens and writes it itself.
+		_ = f.Close()
 		defer os.Remove(outFile)
 	}
 
