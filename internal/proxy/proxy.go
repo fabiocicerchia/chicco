@@ -977,6 +977,7 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 	requestedModel, _ := payload["model"].(string)
 	res, err := r.dispatch(req.Context(), requestedModel, payload, "/chat/completions")
 	if err != nil {
+		setRetryAfter(w, err)
 		writeError(w, dispatchStatus(err), err.Error())
 		return
 	}
@@ -1010,6 +1011,7 @@ func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
 	requestedModel, _ := payload["model"].(string)
 	res, err := r.dispatch(req.Context(), requestedModel, payload, "/embeddings")
 	if err != nil {
+		setRetryAfter(w, err)
 		writeError(w, dispatchStatus(err), err.Error())
 		return
 	}
@@ -1050,9 +1052,12 @@ type dispatchResult struct {
 
 // dispatchError carries the HTTP status a dispatch failure should surface as,
 // since callers speak different error envelopes (OpenAI vs Anthropic shaped).
+// retryAfter is how long the caller should wait before routing could succeed
+// again; zero when waiting cannot help, and no Retry-After is then advertised.
 type dispatchError struct {
-	status int
-	msg    string
+	status     int
+	msg        string
+	retryAfter time.Duration
 }
 
 // Error - Returns the message alone. The status travels beside it and is read
@@ -1106,7 +1111,9 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		if wantsTools {
 			msg = "chicco: request sends 'tools' but every provider for this model is CLI-backed; CLI providers return plain text and cannot emit tool calls"
 		}
-		return nil, &dispatchError{http.StatusServiceUnavailable, msg}
+		// No Retry-After: a config with no usable backend for this request is not
+		// something waiting fixes.
+		return nil, &dispatchError{status: http.StatusServiceUnavailable, msg: msg}
 	}
 
 	var lastErr string
@@ -1121,7 +1128,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		payload["model"] = model
 		upstreamBody, err := json.Marshal(payload)
 		if err != nil {
-			return nil, &dispatchError{http.StatusInternalServerError, "chicco: re-encode body: " + err.Error()}
+			return nil, &dispatchError{status: http.StatusInternalServerError, msg: "chicco: re-encode body: " + err.Error()}
 		}
 
 		// HTTP providers POST upstream; CLI providers run a subprocess. Both return
@@ -1160,44 +1167,64 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		return &dispatchResult{up: up, provider: p.Name, model: model}, nil
 	}
 
+	var retryAfter time.Duration
 	if lastErr == "" {
 		// Nothing was even attempted: every candidate was already in cooldown when
 		// the request arrived. Saying only "all providers exhausted: " gave no way
 		// to tell an exhausted quota from a bad key or a wrong model id, which is
 		// exactly the case where the caller most needs to know.
-		lastErr = "nothing attempted — " + r.blockedSummary(active)
+		var summary string
+		summary, retryAfter = r.blockedSummary(active)
+		lastErr = "nothing attempted — " + summary
 	}
-	return nil, &dispatchError{http.StatusServiceUnavailable, "chicco: all providers exhausted: " + lastErr}
+	return nil, &dispatchError{
+		status:     http.StatusServiceUnavailable,
+		msg:        "chicco: all providers exhausted: " + lastErr,
+		retryAfter: retryAfter,
+	}
 }
 
-// blockedSummary - Describes why each candidate was skipped, for the 503 body.
-func (r *Rotator) blockedSummary(active []Provider) string {
+// blockedSummary - Describes why each candidate was skipped, for the 503 body,
+// and returns the shortest cooldown left among them — the earliest instant
+// routing could succeed again, which the caller advertises as Retry-After. The
+// soonest one, not the longest: one provider coming back is enough to serve the
+// request. Both values come out of a single pass under r.mu, since a second
+// walk would be reading a block set that may already have moved on.
+func (r *Rotator) blockedSummary(active []Provider) (string, time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now()
 	if until, ok := r.blocked[globalKey]; ok && now.Before(until) {
-		return fmt.Sprintf("the global quota: is exhausted, resets in %s", until.Sub(now).Round(time.Second))
+		left := until.Sub(now)
+		return fmt.Sprintf("the global quota: is exhausted, resets in %s", left.Round(time.Second)), left
 	}
 	parts := make([]string, 0, len(active))
+	var soonest time.Duration
+	note := func(key string, until time.Time) {
+		left := until.Sub(now)
+		if soonest == 0 || left < soonest {
+			soonest = left
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s, %s left",
+			key, cmp.Or(r.reason[key], "blocked"), left.Round(time.Second)))
+	}
 	for _, p := range active {
 		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
-			parts = append(parts, fmt.Sprintf("%s: %s, %s left",
-				p.Name, cmp.Or(r.reason[p.Name], "blocked"), until.Sub(now).Round(time.Second)))
+			note(p.Name, until)
 			continue
 		}
 		// Not the provider — the model this virtual model maps to on it.
 		for _, m := range p.Models {
 			mk := p.Name + "/" + m
 			if until, ok := r.blocked[mk]; ok && now.Before(until) {
-				parts = append(parts, fmt.Sprintf("%s: %s, %s left",
-					mk, cmp.Or(r.reason[mk], "blocked"), until.Sub(now).Round(time.Second)))
+				note(mk, until)
 			}
 		}
 	}
 	if len(parts) == 0 {
-		return "no candidate was available"
+		return "no candidate was available", 0
 	}
-	return strings.Join(parts, "; ")
+	return strings.Join(parts, "; "), soonest
 }
 
 // upstream is one provider's reply, abstracted over HTTP and CLI so handleChat and
@@ -1320,6 +1347,24 @@ func usageSplit(line []byte) Usage {
 		u.Total = u.Prompt + u.Completion
 	}
 	return u
+}
+
+// setRetryAfter - Advertises when routing could next succeed, for a dispatch
+// failure that carries a cooldown. Both the OpenAI and Anthropic SDKs honour
+// Retry-After natively, so without it a client backs off on its own schedule
+// and spends its whole retry budget inside a cooldown that outlasts it. Called
+// on the exhaustion path in either wire format (writeError and
+// writeAnthropicError both write w.Header() before the status line), never on
+// the 4xx paths, where an unchanged request fails again however long you wait.
+// RFC 9110 wants whole delta-seconds; round up and never emit 0, which reads as
+// "retry now" and turns a back-off into a hot loop.
+func setRetryAfter(w http.ResponseWriter, err error) {
+	var de *dispatchError
+	if !errors.As(err, &de) || de.retryAfter <= 0 {
+		return
+	}
+	secs := (de.retryAfter + time.Second - 1) / time.Second
+	w.Header().Set("Retry-After", strconv.FormatInt(int64(secs), 10))
 }
 
 // writeError - Replies with an OpenAI-style error envelope so a client parsing

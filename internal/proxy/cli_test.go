@@ -241,6 +241,13 @@ func TestToolsSkipCLIProviders(t *testing.T) {
 	if !strings.Contains(err.Error(), "tools") {
 		t.Errorf("error does not explain the tools gap: %v", err)
 	}
+	// No Retry-After here: this 503 is a config that cannot serve the request,
+	// not a cooldown, and telling a client to come back later would be a lie.
+	rec := httptest.NewRecorder()
+	setRetryAfter(rec, err)
+	if got := rec.Header().Get("Retry-After"); got != "" {
+		t.Errorf("Retry-After = %q on a misconfiguration 503, want none", got)
+	}
 }
 
 func TestProbeCLI(t *testing.T) {

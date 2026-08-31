@@ -36,6 +36,12 @@ chicco redirects to the bare `/dashboard` and stores the key in a `HttpOnly`,
 `SameSite=Strict` cookie, which then authenticates the page and its `/v1/status`
 polling until the browser is closed. Clear the cookie to log out.
 
+When every provider for the requested model is in cooldown, the routed
+endpoints answer `503` in their own error envelope with a `Retry-After` header
+carrying the seconds until the *first* candidate comes back — waiting less than
+that cannot succeed. The `503` for a config with no usable backend carries no
+header, since waiting does not fix it.
+
 `GET /health` is the cheap version of the same question, and is the one endpoint
 the optional inbound `api_key` never guards:
 
