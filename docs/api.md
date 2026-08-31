@@ -24,6 +24,18 @@ observable without a terminal:
 curl -s localhost:41986/v1/status | jq
 ```
 
+When an inbound `api_key` is set, a browser has no way to send the
+`Authorization: Bearer <key>` header the other endpoints expect, so `/dashboard`
+takes the key once from the query string instead:
+
+```
+http://localhost:41986/dashboard?key=<your api_key>
+```
+
+chicco redirects to the bare `/dashboard` and stores the key in a `HttpOnly`,
+`SameSite=Strict` cookie, which then authenticates the page and its `/v1/status`
+polling until the browser is closed. Clear the cookie to log out.
+
 `GET /health` is the cheap version of the same question, and is the one endpoint
 the optional inbound `api_key` never guards:
 

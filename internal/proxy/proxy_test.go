@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"slices"
 	"strings"
@@ -264,11 +265,40 @@ func TestInboundAuth(t *testing.T) {
 		t.Errorf("/health without key = %d, want 200 (probes stay open)", got)
 	}
 
+	// A browser can't send a bearer token: /dashboard?key= trades the secret for
+	// a cookie that then authenticates the page and its /v1/status polling.
+	jar, _ := cookiejar.New(nil)
+	browser := &http.Client{Jar: jar}
+	resp, err := browser.Get(srv.URL + "/dashboard?key=wrong")
+	if err != nil {
+		t.Fatalf("GET /dashboard: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("/dashboard?key=wrong = %d, want 401", resp.StatusCode)
+	}
+	resp, err = browser.Get(srv.URL + "/dashboard?key=s3cret")
+	if err != nil {
+		t.Fatalf("GET /dashboard: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("/dashboard?key=s3cret = %d, want 200 after the cookie redirect", resp.StatusCode)
+	}
+	resp, err = browser.Get(srv.URL + "/v1/status")
+	if err != nil {
+		t.Fatalf("GET /v1/status: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("/v1/status with the dashboard cookie = %d, want 200", resp.StatusCode)
+	}
+
 	// With no key configured, chicco is open (the localhost default).
 	open := NewRotator([]Provider{{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}}}, nil)
 	osrv := httptest.NewServer(Handler(open, nil))
 	defer osrv.Close()
-	resp, err := http.Get(osrv.URL + "/v1/models")
+	resp, err = http.Get(osrv.URL + "/v1/models")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}

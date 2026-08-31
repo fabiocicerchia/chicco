@@ -714,15 +714,45 @@ func Handler(r *Rotator, logs *logBuffer) http.Handler {
 // /health is always open so liveness probes need no secret. The key is read per
 // request (under r.mu) so a SIGHUP reload can add, change, or remove it without
 // a restart.
+//
+// A browser cannot set an Authorization header by typing a URL, so /dashboard
+// also accepts the key once as ?key=<secret> and hands back a cookie; the page
+// and its /v1/status polling then authenticate with that cookie.
 func (r *Rotator) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if key := r.currentAuthKey(); key != "" && req.URL.Path != "/health" &&
-			!bearerMatches(req.Header.Get("Authorization"), key) {
+		key := r.currentAuthKey()
+		if key != "" && req.URL.Path != "/health" && !authorized(req, key) {
+			if req.URL.Path == "/dashboard" && secretMatches(req.URL.Query().Get("key"), key) {
+				http.SetCookie(w, &http.Cookie{
+					Name:     authCookie,
+					Value:    key,
+					Path:     "/",
+					HttpOnly: true,
+					SameSite: http.SameSiteStrictMode,
+				})
+				// Redirect so the secret stops riding in the address bar.
+				http.Redirect(w, req, "/dashboard", http.StatusFound)
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "chicco: missing or invalid API key")
 			return
 		}
 		next.ServeHTTP(w, req)
 	})
+}
+
+// authCookie is the browser-side carrier for the inbound shared secret, set by
+// a /dashboard?key=<secret> visit.
+const authCookie = "chicco_key"
+
+// authorized - Reports whether a request presents the shared secret, either as
+// a bearer token (API clients) or as the dashboard cookie (browsers).
+func authorized(req *http.Request, key string) bool {
+	if bearerMatches(req.Header.Get("Authorization"), key) {
+		return true
+	}
+	c, err := req.Cookie(authCookie)
+	return err == nil && secretMatches(c.Value, key)
 }
 
 // currentAuthKey - Returns the inbound shared secret under r.mu, so a reload
@@ -741,7 +771,12 @@ func bearerMatches(header, key string) bool {
 	if !strings.HasPrefix(header, prefix) {
 		return false
 	}
-	got := strings.TrimSpace(header[len(prefix):])
+	return secretMatches(strings.TrimSpace(header[len(prefix):]), key)
+}
+
+// secretMatches - Constant-time equality for the inbound shared secret, so a
+// wrong key leaks no timing signal whichever way it was presented.
+func secretMatches(got, key string) bool {
 	return subtle.ConstantTimeCompare([]byte(got), []byte(key)) == 1
 }
 
