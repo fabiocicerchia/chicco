@@ -215,7 +215,9 @@ chicco: myproviders.yaml is valid
 Nothing was even tried: every candidate was already in cooldown when the
 request arrived. The summary after the dash says which, and why — an exhausted
 quota, a rejected key and a wrong model id all land here and need different
-fixes.
+fixes. The 503 carries a `Retry-After` (seconds until the first candidate frees
+up), which the OpenAI and Anthropic SDKs honour on their own — retrying earlier
+cannot succeed.
 
 **`chicco: request sends 'tools' but every provider for this model is CLI-backed`**
 CLI providers return plain text and cannot emit tool calls, so they are dropped

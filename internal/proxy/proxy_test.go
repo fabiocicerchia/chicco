@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -264,11 +266,40 @@ func TestInboundAuth(t *testing.T) {
 		t.Errorf("/health without key = %d, want 200 (probes stay open)", got)
 	}
 
+	// A browser can't send a bearer token: /dashboard?key= trades the secret for
+	// a cookie that then authenticates the page and its /v1/status polling.
+	jar, _ := cookiejar.New(nil)
+	browser := &http.Client{Jar: jar}
+	resp, err := browser.Get(srv.URL + "/dashboard?key=wrong")
+	if err != nil {
+		t.Fatalf("GET /dashboard: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("/dashboard?key=wrong = %d, want 401", resp.StatusCode)
+	}
+	resp, err = browser.Get(srv.URL + "/dashboard?key=s3cret")
+	if err != nil {
+		t.Fatalf("GET /dashboard: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("/dashboard?key=s3cret = %d, want 200 after the cookie redirect", resp.StatusCode)
+	}
+	resp, err = browser.Get(srv.URL + "/v1/status")
+	if err != nil {
+		t.Fatalf("GET /v1/status: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("/v1/status with the dashboard cookie = %d, want 200", resp.StatusCode)
+	}
+
 	// With no key configured, chicco is open (the localhost default).
 	open := NewRotator([]Provider{{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}}}, nil)
 	osrv := httptest.NewServer(Handler(open, nil))
 	defer osrv.Close()
-	resp, err := http.Get(osrv.URL + "/v1/models")
+	resp, err = http.Get(osrv.URL + "/v1/models")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -374,6 +405,42 @@ func TestGlobalQuotaCapsAcrossProviders(t *testing.T) {
 	}
 	if got := post(); got != http.StatusServiceUnavailable {
 		t.Errorf("request 3 status = %d, want 503 (global RPD:2 cap tripped)", got)
+	}
+}
+
+// TestExhaustedRetryAfter pins the header on the "all providers exhausted" 503
+// in both wire formats. Without it a client backs off blind: an SDK with five
+// attempts and a 60s cap gives up minutes into an hour-long cooldown, having
+// hammered a proxy that knew the answer all along.
+func TestExhaustedRetryAfter(t *testing.T) {
+	const cooldown = 90 * time.Second
+	rot := NewRotator([]Provider{
+		{Name: "a", BaseURL: "http://unused", APIKey: "k", Models: []string{"m"}},
+	}, nil)
+	rot.block("a", cooldown, "quota")
+	srv := httptest.NewServer(Handler(rot, nil))
+	defer srv.Close()
+
+	for _, tc := range []struct{ path, body string }{
+		{"/v1/chat/completions", `{"model":"m","messages":[{"role":"user","content":"hi"}]}`},
+		{"/v1/messages", `{"model":"m","max_tokens":100,"messages":[{"role":"user","content":"hi"}]}`},
+	} {
+		resp, err := http.Post(srv.URL+tc.path, "application/json", strings.NewReader(tc.body))
+		if err != nil {
+			t.Fatalf("POST %s: %v", tc.path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("%s status = %d, want 503", tc.path, resp.StatusCode)
+		}
+		got, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+		if err != nil {
+			t.Errorf("%s Retry-After = %q, want integer seconds: %v", tc.path, resp.Header.Get("Retry-After"), err)
+			continue
+		}
+		if got < 1 || got > int(cooldown.Seconds()) {
+			t.Errorf("%s Retry-After = %d, want 1..%d", tc.path, got, int(cooldown.Seconds()))
+		}
 	}
 }
 

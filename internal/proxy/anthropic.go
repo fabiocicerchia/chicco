@@ -49,6 +49,7 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 
 	res, err := r.dispatch(req.Context(), requestedModel, payload, "/chat/completions")
 	if err != nil {
+		setRetryAfter(w, err)
 		writeAnthropicError(w, dispatchStatus(err), "overloaded_error", err.Error())
 		return
 	}
