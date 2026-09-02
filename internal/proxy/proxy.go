@@ -1134,33 +1134,23 @@ func dispatchStatus(err error) int {
 	return http.StatusServiceUnavailable
 }
 
-// dispatch - Resolves the active provider set for requestedModel, then walks
-// pick() — retrying on transport errors and non-2xx status, applying the same
-// cooldown/health/quota bookkeeping handleChat always has — until one provider
-// answers with a 2xx or every candidate is exhausted/blocked. It mutates
-// payload["model"] in place with each pick before marshaling, so callers must
-// pass a payload already shaped for upstreamPath (OpenAI chat-completions for
-// "/chat/completions", OpenAI embeddings for "/embeddings"). Shared by
-// handleChat, handleMessages and handleEmbeddings so failover/cooldown/quota
-// logic lives in exactly one place regardless of which wire format the caller
-// used.
-func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload map[string]any, upstreamPath string) (*dispatchResult, error) {
-	// Determine which subset of providers to route to based on the requested model.
-	// "chicco:auto" or an unknown model routes across all active providers.
-	// A known virtual model ID restricts routing to its configured backends.
+// candidatesFor - Returns the providers that may serve this request and the
+// load-balancing strategy to try them in, or the 503 to answer with when the
+// set is empty. "chicco:auto" or an unknown model routes across all active
+// providers; a known virtual model ID restricts routing to its backends.
+//
+// Two kinds of request cannot be served by a CLI provider at all, so those are
+// dropped before the rotation ever sees them rather than answered wrongly:
+// embeddings (a CLI backend returns chat text, not vectors — see runCLI, which
+// reads a "messages" key an embeddings payload does not have), and any request
+// carrying tool definitions (a CLI backend is handed the conversation as one
+// plain-text prompt and narrates the call in prose with finish_reason "stop",
+// which an agent cannot tell from a refusal and reports as "no changes made").
+func (r *Rotator) candidatesFor(requestedModel string, payload map[string]any, upstreamPath string) ([]Provider, string, error) {
 	active, strategy := r.activeForModel(requestedModel)
-	// CLI providers return plain chat text, not vectors — routing an embeddings
-	// request to one yields a 2xx body that isn't an embedding. Drop them here so
-	// they can't be picked (see runCLI, which reads "messages" an embeddings
-	// payload doesn't have).
 	if upstreamPath == "/embeddings" {
 		active = slices.DeleteFunc(active, func(p Provider) bool { return p.Kind == "cli" })
 	}
-	// Same for function-calling: a CLI provider is handed the conversation as one
-	// plain-text prompt and answers with plain text, so a request carrying tool
-	// definitions comes back with the call narrated in prose (often pseudo-XML)
-	// and finish_reason "stop" — indistinguishable from a refusal to any agent,
-	// which then reports "no changes made". Drop them rather than serve that.
 	wantsTools := false
 	if tl, ok := payload["tools"].([]any); ok && len(tl) > 0 {
 		wantsTools = true
@@ -1173,7 +1163,47 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		}
 		// No Retry-After: a config with no usable backend for this request is not
 		// something waiting fixes.
-		return nil, &dispatchError{status: http.StatusServiceUnavailable, msg: msg}
+		return nil, "", &dispatchError{status: http.StatusServiceUnavailable, msg: msg}
+	}
+	return active, strategy, nil
+}
+
+// blockRejected - Applies one non-2xx upstream reply to the rotation state —
+// metrics, the cooldown classifyUpstream chose, and the grey dot for a rejected
+// key — and returns the line describing it for the eventual 503 body. It closes
+// up.body: the reply is not going to the caller.
+func (r *Rotator) blockRejected(p Provider, model string, up *upstream, took time.Duration) string {
+	r.metrics.observeError(p.Name, strconv.Itoa(up.status), took)
+	snippet, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
+	_ = up.body.Close()
+	text := strings.TrimSpace(string(snippet))
+	cls := classifyUpstream(up.status, text, up.retryAfter)
+	key := p.Name
+	if cls.modelScoped {
+		key = p.Name + "/" + model // sibling models stay routable
+	}
+	r.block(key, cls.cooldown, cls.reason)
+	if cls.reason == "auth" {
+		r.setHealth(p.Name, HealthAuth) // bad key — grey it in the dashboard
+	}
+	log.Printf("chicco: %s (%s) HTTP %d, blocked %s %s (%s)", p.Name, model, up.status, key, cls.cooldown, cls.reason)
+	return fmt.Sprintf("%s: HTTP %d: %s", p.Name, up.status, text)
+}
+
+// dispatch - Resolves the active provider set for requestedModel, then walks
+// pick() — retrying on transport errors and non-2xx status, applying the same
+// cooldown/health/quota bookkeeping handleChat always has — until one provider
+// answers with a 2xx or every candidate is exhausted/blocked. It mutates
+// payload["model"] in place with each pick before marshaling, so callers must
+// pass a payload already shaped for upstreamPath (OpenAI chat-completions for
+// "/chat/completions", OpenAI embeddings for "/embeddings"). Shared by
+// handleChat, handleMessages and handleEmbeddings so failover/cooldown/quota
+// logic lives in exactly one place regardless of which wire format the caller
+// used.
+func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload map[string]any, upstreamPath string) (*dispatchResult, error) {
+	active, strategy, err := r.candidatesFor(requestedModel, payload, upstreamPath)
+	if err != nil {
+		return nil, err
 	}
 
 	var lastErr string
@@ -1209,21 +1239,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 			continue
 		}
 		if up.status < 200 || up.status >= 300 {
-			r.metrics.observeError(p.Name, strconv.Itoa(up.status), took)
-			snippet, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
-			_ = up.body.Close()
-			text := strings.TrimSpace(string(snippet))
-			cls := classifyUpstream(up.status, text, up.retryAfter)
-			key := p.Name
-			if cls.modelScoped {
-				key = p.Name + "/" + model // sibling models stay routable
-			}
-			r.block(key, cls.cooldown, cls.reason)
-			if cls.reason == "auth" {
-				r.setHealth(p.Name, HealthAuth) // bad key — grey it in the dashboard
-			}
-			lastErr = fmt.Sprintf("%s: HTTP %d: %s", p.Name, up.status, text)
-			log.Printf("chicco: %s (%s) HTTP %d, blocked %s %s (%s)", p.Name, model, up.status, key, cls.cooldown, cls.reason)
+			lastErr = r.blockRejected(p, model, up, took)
 			continue
 		}
 		log.Printf("chicco: routing to %s (%s)", p.Name, model)
