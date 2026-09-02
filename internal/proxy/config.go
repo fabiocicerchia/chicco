@@ -205,7 +205,14 @@ type Provider struct {
 // hour > minute (largest window first, so the bar tracks the most meaningful
 // hard cap). Returns quota=0 when no limits are configured.
 func (p Provider) effectiveQuota() (quota int64, isTokens bool, window string) {
-	q := p.Quota
+	return quotaBar(p.Quota)
+}
+
+// quotaBar - Resolves one Quota into the dashboard bar parameters. It is the
+// single copy of the day > hour > minute priority: Provider and Backend both
+// read it, and a window added to Quota that only one of them learned about
+// would draw two different bars for the same limit.
+func quotaBar(q Quota) (quota int64, isTokens bool, window string) {
 	switch {
 	case q.TPD > 0:
 		return q.TPD, true, "daily"
@@ -267,22 +274,7 @@ func (b Backend) effectiveQuota(fallback Quota) (quota int64, isTokens bool, win
 	if b.Quota != nil {
 		q = *b.Quota
 	}
-	switch {
-	case q.TPD > 0:
-		return q.TPD, true, "daily"
-	case q.RPD > 0:
-		return int64(q.RPD), false, "daily"
-	case q.TPH > 0:
-		return q.TPH, true, "hourly"
-	case q.RPH > 0:
-		return int64(q.RPH), false, "hourly"
-	case q.TPM > 0:
-		return q.TPM, true, "minutely"
-	case q.RPM > 0:
-		return int64(q.RPM), false, "minutely"
-	default:
-		return 0, false, "none"
-	}
+	return quotaBar(q)
 }
 
 // LoadConfig - Reads and parses chicco.yaml, defaulting the listen address and

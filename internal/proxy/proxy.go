@@ -1000,6 +1000,29 @@ func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data})
 }
 
+// readPostedJSON - Reads and decodes the JSON body of an OpenAI-shaped POST,
+// writing the method/read/parse error itself and reporting ok=false when it
+// did. Shared by handleChat and handleEmbeddings so both reject a GET and a
+// malformed body with the same status and the same error envelope — a caller
+// cannot tell which endpoint it hit from the failure.
+func readPostedJSON(w http.ResponseWriter, req *http.Request) (map[string]any, bool) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return nil, false
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "chicco: read body: "+err.Error())
+		return nil, false
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, "chicco: invalid JSON body: "+err.Error())
+		return nil, false
+	}
+	return payload, true
+}
+
 // handleChat - Forwards one chat-completion request, overriding the model with
 // the rotation's pick and retrying the next provider on any
 // quota/auth/transient failure until one answers (its response is streamed
@@ -1007,18 +1030,8 @@ func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 // upstream's initial status, which is where quota/auth errors surface — once a
 // 2xx body starts streaming to the client there is no rewinding it.
 func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "chicco: read body: "+err.Error())
-		return
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, "chicco: invalid JSON body: "+err.Error())
+	payload, ok := readPostedJSON(w, req)
+	if !ok {
 		return
 	}
 
@@ -1050,18 +1063,8 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 // never streamed, so unlike handleChat this reads the upstream body fully and
 // relays it verbatim.
 func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "chicco: read body: "+err.Error())
-		return
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		writeError(w, http.StatusBadRequest, "chicco: invalid JSON body: "+err.Error())
+	payload, ok := readPostedJSON(w, req)
+	if !ok {
 		return
 	}
 
