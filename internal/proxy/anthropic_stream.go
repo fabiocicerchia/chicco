@@ -85,88 +85,143 @@ func mapStopReason(openaiReason string) string {
 // ever needs it.
 func translateOpenAIStream(body io.Reader, sink anthropicSink) int64 {
 	br := bufio.NewReaderSize(body, 1024*1024)
-	started := false
-	openKind := "" // "", "text", "tool"
-	openToolIdx := -1
-	stopReason := ""
-	var inputTokens, outputTokens, totalTokens int64
-
-	closeIfOpen := func() {
-		if openKind != "" {
-			sink.closeBlock()
-			openKind = ""
-		}
-	}
-
+	st := &streamState{sink: sink, openToolIdx: -1}
 	for {
 		line, rerr := br.ReadBytes('\n')
-		data := bytes.TrimSpace(bytes.TrimPrefix(bytes.TrimSpace(line), []byte("data:")))
-		if len(data) > 0 && !bytes.Equal(data, []byte("[DONE]")) && data[0] == '{' {
-			var chunk openAIChunk
-			if json.Unmarshal(data, &chunk) == nil {
-				if !started {
-					sink.start(chunk.ID, chunk.Model)
-					started = true
-				}
-				for _, c := range chunk.Choices {
-					content := c.Delta.Content
-					toolCalls := c.Delta.ToolCalls
-					if content == "" && len(toolCalls) == 0 && c.Message.Content != "" {
-						content = c.Message.Content // non-streamed body: choices[].message
-					}
-					if content != "" {
-						if openKind != "text" {
-							closeIfOpen()
-							sink.openText()
-							openKind = "text"
-						}
-						sink.textDelta(content)
-					}
-					for _, tc := range toolCalls {
-						if openKind != "tool" || openToolIdx != tc.Index {
-							closeIfOpen()
-							sink.openTool(tc.ID, tc.Function.Name)
-							openKind = "tool"
-							openToolIdx = tc.Index
-						}
-						sink.toolDelta(tc.Function.Arguments)
-					}
-					for _, tc := range c.Message.ToolCalls { // non-streamed body
-						closeIfOpen()
-						sink.openTool(tc.ID, tc.Function.Name)
-						sink.toolDelta(tc.Function.Arguments)
-						openKind = "tool"
-					}
-					if c.FinishReason != "" {
-						stopReason = mapStopReason(c.FinishReason)
-					}
-				}
-				if chunk.Usage != nil {
-					inputTokens = chunk.Usage.PromptTokens
-					outputTokens = chunk.Usage.CompletionTokens
-					totalTokens = chunk.Usage.TotalTokens
-				}
-			}
+		if chunk, ok := parseChunk(line); ok {
+			st.apply(chunk)
 		}
 		if rerr != nil {
 			break
 		}
 	}
+	return st.finish()
+}
 
-	closeIfOpen()
-	if stopReason == "" {
-		stopReason = "end_turn"
+// parseChunk - Decodes one SSE line into an OpenAI chunk. ok is false for the
+// blank separator lines, the terminating "[DONE]" sentinel and anything that
+// isn't a JSON object — all of which the caller skips.
+func parseChunk(line []byte) (openAIChunk, bool) {
+	data := bytes.TrimSpace(bytes.TrimPrefix(bytes.TrimSpace(line), []byte("data:")))
+	if len(data) == 0 || bytes.Equal(data, []byte("[DONE]")) || data[0] != '{' {
+		return openAIChunk{}, false
+	}
+	var chunk openAIChunk
+	if err := json.Unmarshal(data, &chunk); err != nil {
+		return openAIChunk{}, false
+	}
+	return chunk, true
+}
+
+// streamState is the block currently in flight while translating one stream,
+// plus the usage totals seen so far. Anthropic's protocol is a sequence of
+// opened and closed content blocks, so which block is open — and for a tool
+// call, at which choice index — is what decides whether the next delta extends
+// the block or starts a new one.
+type streamState struct {
+	sink        anthropicSink
+	started     bool
+	openKind    string // "", "text", "tool"
+	openToolIdx int
+	stopReason  string
+
+	inputTokens  int64
+	outputTokens int64
+	totalTokens  int64
+}
+
+// closeIfOpen - Closes the block in flight, if there is one.
+func (s *streamState) closeIfOpen() {
+	if s.openKind != "" {
+		s.sink.closeBlock()
+		s.openKind = ""
+	}
+}
+
+// apply - Folds one decoded chunk into the state, emitting the Anthropic events
+// it implies.
+func (s *streamState) apply(chunk openAIChunk) {
+	if !s.started {
+		s.sink.start(chunk.ID, chunk.Model)
+		s.started = true
+	}
+	s.applyChoices(chunk)
+	if chunk.Usage != nil {
+		s.inputTokens = chunk.Usage.PromptTokens
+		s.outputTokens = chunk.Usage.CompletionTokens
+		s.totalTokens = chunk.Usage.TotalTokens
+	}
+}
+
+// applyChoices - Emits the events for a chunk's choices. It reads both the
+// streaming shape (choices[].delta) and the single-object shape
+// (choices[].message), so a non-SSE upstream still translates.
+func (s *streamState) applyChoices(chunk openAIChunk) {
+	for _, c := range chunk.Choices {
+		content := c.Delta.Content
+		if content == "" && len(c.Delta.ToolCalls) == 0 && c.Message.Content != "" {
+			content = c.Message.Content // non-streamed body: choices[].message
+		}
+		if content != "" {
+			s.textDelta(content)
+		}
+		for _, tc := range c.Delta.ToolCalls {
+			s.toolDelta(tc.Index, tc.ID, tc.Function.Name, tc.Function.Arguments)
+		}
+		for _, tc := range c.Message.ToolCalls { // non-streamed body
+			// Always a fresh block: a non-streamed body carries each tool call
+			// whole, so there is nothing to append to.
+			s.closeIfOpen()
+			s.sink.openTool(tc.ID, tc.Function.Name)
+			s.sink.toolDelta(tc.Function.Arguments)
+			s.openKind = "tool"
+		}
+		if c.FinishReason != "" {
+			s.stopReason = mapStopReason(c.FinishReason)
+		}
+	}
+}
+
+// textDelta - Appends text to the open text block, opening one first when the
+// block in flight is something else.
+func (s *streamState) textDelta(content string) {
+	if s.openKind != "text" {
+		s.closeIfOpen()
+		s.sink.openText()
+		s.openKind = "text"
+	}
+	s.sink.textDelta(content)
+}
+
+// toolDelta - Appends partial JSON arguments to the open tool block, opening a
+// new one when the choice index moved on to the next tool call.
+func (s *streamState) toolDelta(index int, id, name, args string) {
+	if s.openKind != "tool" || s.openToolIdx != index {
+		s.closeIfOpen()
+		s.sink.openTool(id, name)
+		s.openKind = "tool"
+		s.openToolIdx = index
+	}
+	s.sink.toolDelta(args)
+}
+
+// finish - Closes the stream out and returns the total token count for chicco's
+// own usage accounting.
+func (s *streamState) finish() int64 {
+	s.closeIfOpen()
+	if s.stopReason == "" {
+		s.stopReason = "end_turn"
 	}
 	// CLI providers' synthesized usage only carries a total (see synthSSE in
 	// cli.go); attribute it all to output since the whole reply is generated text.
-	if outputTokens == 0 && totalTokens > 0 {
-		outputTokens = totalTokens
+	if s.outputTokens == 0 && s.totalTokens > 0 {
+		s.outputTokens = s.totalTokens
 	}
-	if totalTokens == 0 {
-		totalTokens = inputTokens + outputTokens
+	if s.totalTokens == 0 {
+		s.totalTokens = s.inputTokens + s.outputTokens
 	}
-	sink.finish(stopReason, inputTokens, outputTokens)
-	return totalTokens
+	s.sink.finish(s.stopReason, s.inputTokens, s.outputTokens)
+	return s.totalTokens
 }
 
 // --- sseSink: live Anthropic SSE relay ---

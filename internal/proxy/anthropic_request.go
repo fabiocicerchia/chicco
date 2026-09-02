@@ -55,23 +55,9 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 		return nil, "", false, errors.New("messages is required")
 	}
 
-	// []any, NOT []map[string]any: this payload is consumed by the same code that
-	// handles /v1/chat/completions, where it arrives from json.Unmarshal and so is
-	// always []any. splitMessages (cli.go) type-asserts .([]any) — a
-	// []map[string]any fails that assertion silently, yielding an EMPTY prompt, so
-	// every CLI provider reached through /v1/messages ran with no input at all.
-	messages := []any{}
-	if sys := anthropicBlockText(req.System); sys != "" {
-		messages = append(messages, map[string]any{"role": "system", "content": sys})
-	}
-	for _, m := range req.Messages {
-		converted, err := convertAnthropicMessage(m)
-		if err != nil {
-			return nil, "", false, err
-		}
-		for _, c := range converted {
-			messages = append(messages, c)
-		}
+	messages, err := anthropicMessages(req)
+	if err != nil {
+		return nil, "", false, err
 	}
 
 	payload = map[string]any{
@@ -79,6 +65,40 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 		"messages":   messages,
 		"max_tokens": req.MaxTokens,
 	}
+	anthropicOptions(req, payload)
+	return payload, req.Model, req.Stream, nil
+}
+
+// anthropicMessages - Flattens the system prompt and every Anthropic turn into
+// the OpenAI messages array.
+//
+// The result is []any, NOT []map[string]any: this payload is consumed by the
+// same code that handles /v1/chat/completions, where it arrives from
+// json.Unmarshal and so is always []any. splitMessages (cli.go) type-asserts
+// .([]any) — a []map[string]any fails that assertion silently, yielding an
+// EMPTY prompt, so every CLI provider reached through /v1/messages ran with no
+// input at all.
+func anthropicMessages(req anthropicRequest) ([]any, error) {
+	messages := []any{}
+	if sys := anthropicBlockText(req.System); sys != "" {
+		messages = append(messages, map[string]any{"role": "system", "content": sys})
+	}
+	for _, m := range req.Messages {
+		converted, err := convertAnthropicMessage(m)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range converted {
+			messages = append(messages, c)
+		}
+	}
+	return messages, nil
+}
+
+// anthropicOptions - Copies the optional sampling, stop-sequence and tool
+// fields onto the OpenAI payload, omitting each one the request left unset so
+// the upstream sees its own default rather than a zero value.
+func anthropicOptions(req anthropicRequest, payload map[string]any) {
 	if req.Temperature != nil {
 		payload["temperature"] = *req.Temperature
 	}
@@ -89,27 +109,30 @@ func anthropicToOpenAI(body []byte) (payload map[string]any, model string, strea
 		payload["stop"] = req.StopSequences
 	}
 	if len(req.Tools) > 0 {
-		// []any for the same reason as messages above — dispatch() checks
-		// payload["tools"].([]any) to warn that a CLI provider ignores
-		// function-calling, and a []map[string]any silently skips that warning.
-		tools := make([]any, len(req.Tools))
-		for i, t := range req.Tools {
-			tools[i] = map[string]any{
-				"type": "function",
-				"function": map[string]any{
-					"name":        t.Name,
-					"description": t.Description,
-					"parameters":  t.InputSchema,
-				},
-			}
-		}
-		payload["tools"] = tools
+		payload["tools"] = anthropicTools(req.Tools)
 	}
 	if len(req.ToolChoice) > 0 {
 		payload["tool_choice"] = anthropicToolChoice(req.ToolChoice)
 	}
+}
 
-	return payload, req.Model, req.Stream, nil
+// anthropicTools - Maps Anthropic tool declarations onto OpenAI function
+// declarations. []any for the same reason as anthropicMessages — dispatch()
+// checks payload["tools"].([]any) to warn that a CLI provider ignores
+// function-calling, and a []map[string]any silently skips that warning.
+func anthropicTools(tools []anthropicTool) []any {
+	out := make([]any, len(tools))
+	for i, t := range tools {
+		out[i] = map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        t.Name,
+				"description": t.Description,
+				"parameters":  t.InputSchema,
+			},
+		}
+	}
+	return out
 }
 
 // convertAnthropicMessage - Turns one Anthropic message (string or
@@ -127,32 +150,42 @@ func convertAnthropicMessage(m anthropicMessage) ([]map[string]any, error) {
 	}
 
 	if m.Role == "assistant" {
-		var text strings.Builder
-		var toolCalls []map[string]any
-		for _, b := range blocks {
-			switch b.Type {
-			case "text":
-				text.WriteString(b.Text)
-			case "tool_use":
-				toolCalls = append(toolCalls, map[string]any{
-					"id":   b.ID,
-					"type": "function",
-					"function": map[string]any{
-						"name":      b.Name,
-						"arguments": string(b.Input),
-					},
-				})
-			}
-		}
-		msg := map[string]any{"role": "assistant", "content": text.String()}
-		if len(toolCalls) > 0 {
-			msg["tool_calls"] = toolCalls
-		}
-		return []map[string]any{msg}, nil
+		return []map[string]any{assistantMessage(blocks)}, nil
 	}
+	return userMessages(blocks), nil
+}
 
-	// role == "user": text blocks accumulate into a user message, flushed
-	// whenever a tool_result interrupts them, preserving block order.
+// assistantMessage - Folds an assistant turn's blocks into one OpenAI message:
+// its text blocks concatenated, its tool_use blocks as a tool_calls array.
+func assistantMessage(blocks []anthropicContentBlock) map[string]any {
+	var text strings.Builder
+	var toolCalls []map[string]any
+	for _, b := range blocks {
+		switch b.Type {
+		case "text":
+			text.WriteString(b.Text)
+		case "tool_use":
+			toolCalls = append(toolCalls, map[string]any{
+				"id":   b.ID,
+				"type": "function",
+				"function": map[string]any{
+					"name":      b.Name,
+					"arguments": string(b.Input),
+				},
+			})
+		}
+	}
+	msg := map[string]any{"role": "assistant", "content": text.String()}
+	if len(toolCalls) > 0 {
+		msg["tool_calls"] = toolCalls
+	}
+	return msg
+}
+
+// userMessages - Splits a user turn's blocks into OpenAI messages: text blocks
+// accumulate into a user message, flushed whenever a tool_result interrupts
+// them, so block order is preserved across the role change.
+func userMessages(blocks []anthropicContentBlock) []map[string]any {
 	var out []map[string]any
 	var text strings.Builder
 	flush := func() {
@@ -178,7 +211,7 @@ func convertAnthropicMessage(m anthropicMessage) ([]map[string]any, error) {
 		}
 	}
 	flush()
-	return out, nil
+	return out
 }
 
 // anthropicStringContent - Reports whether raw is a plain JSON string

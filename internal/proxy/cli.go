@@ -67,31 +67,11 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 		args[i] = repl.Replace(a)
 	}
 
-	timeout := cliDefaultTimeout
-	if p.TimeoutSecs > 0 {
-		timeout = time.Duration(p.TimeoutSecs) * time.Second
-	}
-	cctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(cctx, p.Command, args...)
-	if p.PromptStdin {
-		cmd.Stdin = strings.NewReader(prompt)
-	}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return cliFailure(msg), nil
+	raw, failure := cliRun(ctx, p, args, prompt, outFile)
+	if failure != "" {
+		return cliFailure(failure), nil
 	}
 
-	raw := stdout.Bytes()
-	if p.OutputFile {
-		raw, _ = os.ReadFile(outFile)
-	}
 	text, tokens, promptTokens, failed := extractCompletion(p, raw)
 	if failed {
 		// The tool ran but reported an error in its output (e.g. claude's
@@ -119,23 +99,60 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 		promptTokens = int64(len(prompt) / 4)
 	}
 
-	// Answer in the shape the caller asked for. Synthesizing SSE unconditionally
-	// handed a `"stream": false` client `Content-Type: text/event-stream` and
-	// `data:` frames, which no OpenAI client parses. handleMessages always sets
-	// stream=true before dispatch, so the Anthropic path is unaffected.
-	if s, _ := payload["stream"].(bool); !s {
+	stream, _ := payload["stream"].(bool)
+	return cliUpstream(model, text, promptTokens, tokens, stream), nil
+}
+
+// cliRun - Runs the provider's command once and returns whatever it produced:
+// its stdout, or the contents of the {{output_file}} temp path for a tool that
+// writes there instead. failure is non-empty when the run itself failed
+// (non-zero exit, timeout, missing binary) and carries the message to report.
+func cliRun(ctx context.Context, p Provider, args []string, prompt, outFile string) (raw []byte, failure string) {
+	timeout := cliDefaultTimeout
+	if p.TimeoutSecs > 0 {
+		timeout = time.Duration(p.TimeoutSecs) * time.Second
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(cctx, p.Command, args...)
+	if p.PromptStdin {
+		cmd.Stdin = strings.NewReader(prompt)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, msg
+	}
+	if p.OutputFile {
+		raw, _ = os.ReadFile(outFile)
+		return raw, ""
+	}
+	return stdout.Bytes(), ""
+}
+
+// cliUpstream - Wraps a finished completion as the upstream the caller asked
+// for. Synthesizing SSE unconditionally handed a `"stream": false` client
+// `Content-Type: text/event-stream` and `data:` frames, which no OpenAI client
+// parses. handleMessages always sets stream=true before dispatch, so the
+// Anthropic path is unaffected.
+func cliUpstream(model, text string, promptTokens, tokens int64, stream bool) *upstream {
+	if !stream {
 		return &upstream{
 			status:      http.StatusOK,
 			contentType: "application/json",
 			body:        io.NopCloser(bytes.NewReader(synthJSON(model, text, promptTokens, tokens))),
-		}, nil
+		}
 	}
-
 	return &upstream{
 		status:      http.StatusOK,
 		contentType: "text/event-stream",
 		body:        io.NopCloser(bytes.NewReader(synthSSE(model, text, promptTokens, tokens))),
-	}, nil
+	}
 }
 
 // splitMessages - Pulls the system prompt and the joined user/assistant turns

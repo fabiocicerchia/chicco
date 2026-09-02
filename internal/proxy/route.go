@@ -122,17 +122,12 @@ func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bo
 	// per provider, since it isn't provider-specific. Trips exactly like a
 	// per-provider block: the caller's existing "every provider is in cooldown"
 	// path (a 503) covers it with no new error handling.
-	if r.quota != (Quota{}) {
-		if until := r.eventLogs[globalKey].check(r.quota); until.After(now) {
-			r.blocked[globalKey] = until
-			r.reason[globalKey] = "limit"
-			r.dirty = true
-			return Provider{}, "", false
-		}
+	if r.quota != (Quota{}) && r.tripQuota(globalKey, r.quota, now) {
+		return Provider{}, "", false
 	}
 
 	for _, p := range r.order(active, strategy) {
-		if until, ok := r.blocked[p.Name]; ok && now.Before(until) {
+		if r.inCooldown(p.Name, now) {
 			continue
 		}
 
@@ -147,41 +142,55 @@ func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bo
 		mk := p.Name + "/" + model
 		r.modelIdx[p.Name] = i
 
-		// Provider-level rate-limit check.
-		if el, ok := r.eventLogs[p.Name]; ok {
-			if until := el.check(p.Quota); until.After(now) {
-				r.blocked[p.Name] = until
-				r.reason[p.Name] = "limit"
-				r.dirty = true
-				continue
-			}
+		if r.tripQuota(p.Name, p.Quota, now) {
+			continue
 		}
 
 		// Model-scoped block: a per-model quota that tripped on an earlier pick, or
 		// an upstream that rejected this specific model (see classifyUpstream).
 		// Checked unconditionally — this used to be the else-branch of the per-model
 		// quota test below, so any backend declaring a quota silently ignored it.
-		if until, ok := r.blocked[mk]; ok && now.Before(until) {
+		if r.inCooldown(mk, now) {
 			continue
 		}
 
 		// Per-model rate-limit check (only when this backend has its own quota).
-		if q, hasModelQuota := r.backendQuotas[mk]; hasModelQuota {
-			if el, ok := r.eventLogs[mk]; ok {
-				if until := el.check(q); until.After(now) {
-					// Block this specific model key; do NOT block the whole provider
-					// so other models on this provider are still reachable.
-					r.blocked[mk] = until
-					r.reason[mk] = "limit"
-					r.dirty = true
-					continue
-				}
-			}
+		// Blocks this specific model key; NOT the whole provider, so other models
+		// on this provider are still reachable.
+		if q, hasModelQuota := r.backendQuotas[mk]; hasModelQuota && r.tripQuota(mk, q, now) {
+			continue
 		}
 
 		return p, model, true
 	}
 	return Provider{}, "", false
+}
+
+// inCooldown - Reports whether key — a provider name, a "provider/model" pair,
+// or globalKey — is still blocked at now. The caller must hold r.mu.
+func (r *Rotator) inCooldown(key string, now time.Time) bool {
+	until, ok := r.blocked[key]
+	return ok && now.Before(until)
+}
+
+// tripQuota - Checks key's rolling event log against q and, if the window is
+// full, puts key in cooldown until the oldest event in that window expires.
+// Reports whether it tripped. This is the single copy of the check for the
+// global, provider-level and per-model quotas, so a cooldown recorded for one
+// of them can't drift from the others. The caller must hold r.mu.
+func (r *Rotator) tripQuota(key string, q Quota, now time.Time) bool {
+	el, ok := r.eventLogs[key]
+	if !ok {
+		return false
+	}
+	until := el.check(q)
+	if !until.After(now) {
+		return false
+	}
+	r.blocked[key] = until
+	r.reason[key] = "limit"
+	r.dirty = true
+	return true
 }
 
 // order - Returns the active providers in the sequence pick should try them,

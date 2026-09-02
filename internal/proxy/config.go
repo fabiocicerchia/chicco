@@ -95,7 +95,17 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.Pricing = raw.Pricing
 	c.Alerts = raw.Alerts
 
-	n := &raw.Providers
+	providers, err := decodeProviders(&raw.Providers)
+	if err != nil {
+		return err
+	}
+	c.Providers = providers
+	return nil
+}
+
+// decodeProviders - Decodes the providers: node in either supported format,
+// keeping document order in both.
+func decodeProviders(n *yaml.Node) ([]Provider, error) {
 	// Unwrap a document node if present.
 	if n.Kind == yaml.DocumentNode && len(n.Content) == 1 {
 		n = n.Content[0]
@@ -103,46 +113,54 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	switch n.Kind {
 	case yaml.Kind(0): // absent / null — zero providers is fine
-		// nothing to do
+		return nil, nil
 
 	case yaml.SequenceNode:
 		// Original list format:
 		//   providers:
 		//     - name: groq
 		//       base_url: …
-		if err := n.Decode(&c.Providers); err != nil {
-			return fmt.Errorf("providers (list): %w", err)
+		var out []Provider
+		if err := n.Decode(&out); err != nil {
+			return nil, fmt.Errorf("providers (list): %w", err)
 		}
+		return out, nil
 
 	case yaml.MappingNode:
-		// Keyed map format:
-		//   providers:
-		//     groq:
-		//       base_url: …
-		// Mapping nodes are pairs: [key0, val0, key1, val1, …].
-		if len(n.Content)%2 != 0 {
-			return fmt.Errorf("providers: malformed mapping node")
-		}
-		c.Providers = make([]Provider, 0, len(n.Content)/2)
-		for i := 0; i < len(n.Content); i += 2 {
-			nameNode := n.Content[i]
-			valNode := n.Content[i+1]
-			var p Provider
-			if err := valNode.Decode(&p); err != nil {
-				return fmt.Errorf("provider %q: %w", nameNode.Value, err)
-			}
-			// Use the map key as the name when the entry itself has no name: field.
-			if p.Name == "" {
-				p.Name = nameNode.Value
-			}
-			c.Providers = append(c.Providers, p)
-		}
+		return decodeProviderMap(n)
 
 	default:
-		return fmt.Errorf("providers: expected a list or map, got YAML kind %v", n.Kind)
+		return nil, fmt.Errorf("providers: expected a list or map, got YAML kind %v", n.Kind)
 	}
+}
 
-	return nil
+// decodeProviderMap - Decodes the keyed map format:
+//
+//	providers:
+//	  groq:
+//	    base_url: …
+//
+// The map key becomes Provider.Name unless the entry sets one itself.
+func decodeProviderMap(n *yaml.Node) ([]Provider, error) {
+	// Mapping nodes are pairs: [key0, val0, key1, val1, …].
+	if len(n.Content)%2 != 0 {
+		return nil, fmt.Errorf("providers: malformed mapping node")
+	}
+	out := make([]Provider, 0, len(n.Content)/2)
+	for i := 0; i < len(n.Content); i += 2 {
+		nameNode := n.Content[i]
+		valNode := n.Content[i+1]
+		var p Provider
+		if err := valNode.Decode(&p); err != nil {
+			return nil, fmt.Errorf("provider %q: %w", nameNode.Value, err)
+		}
+		// Use the map key as the name when the entry itself has no name: field.
+		if p.Name == "" {
+			p.Name = nameNode.Value
+		}
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 // Quota holds the client-side rate-limit caps for a provider. All fields are

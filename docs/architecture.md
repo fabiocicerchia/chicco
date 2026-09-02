@@ -14,7 +14,7 @@ else lives in `internal/proxy`, one file per job:
 | Serving a request | `proxy.go` (endpoints), `auth.go` (inbound key), `dispatch.go` (failover), `classify.go` (what a non-2xx means) |
 | Anthropic wire format | `anthropic.go` (`/v1/messages`), `anthropic_request.go` (in), `anthropic_stream.go` + `anthropic_sse.go` + `anthropic_json.go` (out) |
 | CLI providers | `cli.go` (run it), `clierrors.go` (read the failure), `clisynth.go` (synthesize the OpenAI reply) |
-| Dashboards | `ui.go` + `uirender.go` (terminal), `web.go` + `dashboard.html` (browser), `logbuffer.go` (shared log ring) |
+| Dashboards | `ui.go` + `uirender.go` + `uiprovider.go` (terminal), `web.go` + `dashboard.html` (browser), `logbuffer.go` (shared log ring) |
 | Observability | `metrics.go`, `cost.go`, `alert.go`, `health.go`, `test.go` |
 
 The browser dashboard is a single self-contained `dashboard.html`, compiled into

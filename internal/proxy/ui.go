@@ -82,61 +82,62 @@ func (m uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c", "esc":
-			return m, tea.Quit
-		case "t":
-			// Probe every configured model with a hello-world prompt; results are
-			// logged to the pane and fold back into the table. Runs in the
-			// background so the dashboard stays responsive.
-			go runTest(m.rot)
-		case "tab":
-			if m.focus == focusProviders {
-				m.focus = focusLogs
-			} else {
-				m.focus = focusProviders
-			}
-		case "up", "k":
-			if m.focus == focusProviders {
-				if m.providerScroll > 0 {
-					m.providerScroll--
-				}
-			} else {
-				m.logScroll++
-			}
-		case "down", "j":
-			if m.focus == focusProviders {
-				m.providerScroll++
-			} else {
-				if m.logScroll > 0 {
-					m.logScroll--
-				}
-			}
-		case "pgup":
-			page := m.pageSize()
-			if m.focus == focusProviders {
-				m.providerScroll -= page
-				if m.providerScroll < 0 {
-					m.providerScroll = 0
-				}
-			} else {
-				m.logScroll += page
-			}
-		case "pgdown":
-			page := m.pageSize()
-			if m.focus == focusProviders {
-				m.providerScroll += page
-			} else {
-				m.logScroll -= page
-				if m.logScroll < 0 {
-					m.logScroll = 0
-				}
-			}
-		}
+		return m.key(msg.String())
 	case tickMsg:
 		return m, tick()
 	}
 	return m, nil
+}
+
+// key - Applies one keypress to the model and returns the next one.
+func (m uiModel) key(k string) (tea.Model, tea.Cmd) {
+	switch k {
+	case "q", "ctrl+c", "esc":
+		return m, tea.Quit
+	case "t":
+		// Probe every configured model with a hello-world prompt; results are
+		// logged to the pane and fold back into the table. Runs in the
+		// background so the dashboard stays responsive.
+		go runTest(m.rot)
+	case "tab":
+		if m.focus == focusProviders {
+			m.focus = focusLogs
+		} else {
+			m.focus = focusProviders
+		}
+	case "up", "k":
+		m.scrollBack(1)
+	case "down", "j":
+		m.scrollForward(1)
+	case "pgup":
+		m.scrollBack(m.pageSize())
+	case "pgdown":
+		m.scrollForward(m.pageSize())
+	}
+	return m, nil
+}
+
+// scrollBack - Scrolls the focused pane n rows towards the start of its
+// content: up the provider table, back through the log history. Clamped at the
+// provider table's top; the log pane's far end is clamped at render time,
+// against a line count only the renderer knows.
+func (m *uiModel) scrollBack(n int) {
+	if m.focus == focusProviders {
+		m.providerScroll = max(0, m.providerScroll-n)
+	} else {
+		m.logScroll += n
+	}
+}
+
+// scrollForward - Scrolls the focused pane n rows towards the end of its
+// content: down the provider table, forward to the newest log lines. Clamped at
+// the log pane's newest line, the provider table's far end at render time.
+func (m *uiModel) scrollForward(n int) {
+	if m.focus == focusProviders {
+		m.providerScroll += n
+	} else {
+		m.logScroll = max(0, m.logScroll-n)
+	}
 }
 
 // pageSize - Returns how many lines to jump on pgup/pgdown — half the log pane
