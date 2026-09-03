@@ -3,6 +3,8 @@ package proxy
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestUsageTokens(t *testing.T) {
@@ -126,5 +128,97 @@ func TestViewNoPanic(t *testing.T) {
 		if sz[0] >= 80 && !strings.Contains(out, "llama-3.3-70b") {
 			t.Errorf("model name not shown in dashboard at %dx%d", sz[0], sz[1])
 		}
+	}
+}
+
+// TestUpdateScrollKeys drives the key handling that scrolls the two panes. The
+// panes scroll in opposite directions — providerScroll counts rows from the top
+// of the table, logScroll counts lines back from the newest — and only the
+// edges the model itself knows about are clamped here; the far ends are clamped
+// at render time against line counts only the renderer has.
+func TestUpdateScrollKeys(t *testing.T) {
+	press := func(m uiModel, keys ...tea.KeyMsg) uiModel {
+		for _, k := range keys {
+			next, _ := m.Update(k)
+			m = next.(uiModel)
+		}
+		return m
+	}
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	up := tea.KeyMsg{Type: tea.KeyUp}
+	pgdn := tea.KeyMsg{Type: tea.KeyPgDown}
+	pgup := tea.KeyMsg{Type: tea.KeyPgUp}
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+
+	m := newUIModel(NewRotator(nil, nil), newLogBuffer(10), ":41986")
+	m.height = 24 // pageSize() reads it: (24*2/5 - 2) / 2 = 3
+
+	// Provider pane: down moves away from the top, up comes back and stops at 0.
+	got := press(m, down, down, down, up)
+	if got.providerScroll != 2 {
+		t.Errorf("providerScroll after 3×down 1×up = %d, want 2", got.providerScroll)
+	}
+	if got := press(m, up, up).providerScroll; got != 0 {
+		t.Errorf("providerScroll after 2×up from the top = %d, want 0", got)
+	}
+	if got := press(m, pgdn, pgup, pgup).providerScroll; got != 0 {
+		t.Errorf("providerScroll after pgdown then 2×pgup = %d, want 0", got)
+	}
+	if got := press(m, pgdn).providerScroll; got != 3 {
+		t.Errorf("providerScroll after pgdown = %d, want one page (3)", got)
+	}
+
+	// Log pane: up walks back through history, down returns to the newest line.
+	logs := press(m, tab, up, up, up, down)
+	if logs.logScroll != 2 {
+		t.Errorf("logScroll after 3×up 1×down = %d, want 2", logs.logScroll)
+	}
+	if logs.providerScroll != 0 {
+		t.Errorf("log-pane keys moved providerScroll to %d, want 0", logs.providerScroll)
+	}
+	if got := press(m, tab, down, down).logScroll; got != 0 {
+		t.Errorf("logScroll after 2×down at the newest line = %d, want 0", got)
+	}
+	if got := press(m, tab, pgup).logScroll; got != 3 {
+		t.Errorf("logScroll after pgup = %d, want one page (3)", got)
+	}
+
+	// tab twice comes back to the provider pane.
+	if got := press(m, tab, tab).focus; got != focusProviders {
+		t.Errorf("focus after 2×tab = %v, want focusProviders", got)
+	}
+}
+
+// TestProviderRowsQuotaCells pins the usage cells providerRows writes: the
+// provider row measures against the provider quota, a model with its own quota
+// measures against that instead, and a model without one falls back to the
+// provider's so the column stays comparable.
+func TestProviderRowsQuotaCells(t *testing.T) {
+	s := ProviderStat{
+		Name: "groq", Kind: "http", Health: HealthOK,
+		Quota: 1000, QuotaIsTokens: true, UsedTokens: 250, Requests: 4,
+		Models: []ModelStat{
+			{Name: "big", Tokens: 200, Requests: 3},
+			{Name: "small", Tokens: 50, Requests: 1, Quota: 100, QuotaIsTokens: true, UsedTokens: 50},
+			{Name: "capped", Requests: 6, Quota: 10},
+		},
+	}
+	rows := providerRows(s, 200)
+	if len(rows) != 3 {
+		t.Fatalf("providerRows returned %d rows, want one per model", len(rows))
+	}
+	for i, want := range []string{"250 / 1.0k", "50 / 100", "6 / 10 req"} {
+		if !strings.Contains(rows[i], want) {
+			t.Errorf("row %d = %q, want it to carry %q", i, rows[i], want)
+		}
+	}
+	// The model with no quota of its own falls back to the provider's.
+	if !strings.Contains(rows[0], "200 / 1.0k") && !strings.Contains(rows[0], "250 / 1.0k") {
+		t.Errorf("provider row = %q, want the provider-level usage cell", rows[0])
+	}
+	// A provider with no quota at all gets the placeholder, not a bar.
+	noQuota := providerRows(ProviderStat{Name: "x", Health: HealthOK, Models: []ModelStat{{Name: "m"}}}, 200)
+	if !strings.Contains(noQuota[0], "(no quota)") {
+		t.Errorf("unquota'd provider row = %q, want (no quota)", noQuota[0])
 	}
 }

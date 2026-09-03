@@ -85,14 +85,7 @@ func Run(opts Options) error {
 		return err
 	}
 
-	rot := NewRotator(cfg.Providers, cfg.Models)
-	rot.authKey = cfg.APIKey // shared secret guarding inbound requests, if set
-	rot.quota = cfg.Quota    // optional cap across every provider combined, if set
-	if cfg.Aliases != nil {
-		rot.aliases = cfg.Aliases
-	}
-	rot.costs = newCostTracker(cfg.Pricing)
-	rot.alerts = newAlerter(cfg.Alerts)
+	rot := newRotator(cfg)
 	active := rot.Active()
 	if len(active) == 0 {
 		return fmt.Errorf("no providers with an API key and models are configured —\n"+
@@ -120,36 +113,14 @@ func Run(opts Options) error {
 	// survives restarts/reboots.
 	if opts.StatePath != "" {
 		rot.EnablePersistence(opts.StatePath)
-		go func() {
-			t := time.NewTicker(10 * time.Second)
-			defer t.Stop()
-			// Report a failing write ONCE. Discarding this error hid an unwritable
-			// state directory for as long as it existed: usage counters and
-			// rate-limit windows silently reset on every restart, which lets a
-			// daily quota be re-spent by restarting. Once, not every tick, so a
-			// permanent failure can't flood the log or the dashboard pane.
-			var warned bool
-			for range t.C {
-				if err := rot.Persist(); err != nil && !warned {
-					warned = true
-					log.Printf("chicco: WARNING: cannot write state to %s (%v) — usage counters "+
-						"and rate-limit windows will reset on restart", opts.StatePath, err)
-				}
-			}
-		}()
+		go persistLoop(rot, opts.StatePath)
 	}
 
 	// Metrics listener, when configured. Its own port and its own goroutine: a
 	// scrape must not be able to occupy a slot on the proxy listener, and a
 	// misconfigured metrics addr must not stop the proxy serving.
 	if cfg.Metrics.Enabled {
-		msrv := &http.Server{Addr: cfg.Metrics.Addr, Handler: rot.MetricsHandler(), ReadHeaderTimeout: readHeaderTimeout}
-		go func() {
-			log.Printf("chicco: metrics on http://%s/metrics", cfg.Metrics.Addr)
-			if err := msrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Println("chicco: metrics server error:", err)
-			}
-		}()
+		go serveMetrics(rot, cfg.Metrics.Addr)
 	}
 
 	// Always keep a log buffer so /v1/status (the web dashboard) has something to
@@ -160,19 +131,74 @@ func Run(opts Options) error {
 	// Fall back to plain logging when asked or when stdout isn't a terminal (piped,
 	// systemd, etc.) — the dashboard needs a real TTY.
 	if opts.Headless || !isatty.IsTerminal(os.Stdout.Fd()) {
-		log.SetOutput(io.MultiWriter(os.Stderr, logs)) // keep stderr; also feed the web dashboard
-		log.Printf("chicco %s listening on %s (%s) — rotating across %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(active), names)
-		srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
-		return srv.ListenAndServe()
+		return serveHeadless(rot, logs, cfg, opts, names)
 	}
+	return serveDashboard(rot, logs, cfg, opts, names)
+}
 
+// newRotator - Builds the rotator the whole run shares from the loaded config.
+func newRotator(cfg Config) *Rotator {
+	rot := NewRotator(cfg.Providers, cfg.Models)
+	rot.authKey = cfg.APIKey // shared secret guarding inbound requests, if set
+	rot.quota = cfg.Quota    // optional cap across every provider combined, if set
+	if cfg.Aliases != nil {
+		rot.aliases = cfg.Aliases
+	}
+	rot.costs = newCostTracker(cfg.Pricing)
+	rot.alerts = newAlerter(cfg.Alerts)
+	return rot
+}
+
+// persistLoop - Flushes the token counters to statePath every ten seconds and
+// never returns.
+//
+// A failing write is reported ONCE. Discarding this error hid an unwritable
+// state directory for as long as it existed: usage counters and rate-limit
+// windows silently reset on every restart, which lets a daily quota be re-spent
+// by restarting. Once, not every tick, so a permanent failure can't flood the
+// log or the dashboard pane.
+func persistLoop(rot *Rotator, statePath string) {
+	t := time.NewTicker(10 * time.Second)
+	defer t.Stop()
+	var warned bool
+	for range t.C {
+		if err := rot.Persist(); err != nil && !warned {
+			warned = true
+			log.Printf("chicco: WARNING: cannot write state to %s (%v) — usage counters "+
+				"and rate-limit windows will reset on restart", statePath, err)
+		}
+	}
+}
+
+// serveMetrics - Serves the Prometheus exposition on addr until it fails.
+// Blocks, so it wants its own goroutine.
+func serveMetrics(rot *Rotator, addr string) {
+	msrv := &http.Server{Addr: addr, Handler: rot.MetricsHandler(), ReadHeaderTimeout: readHeaderTimeout}
+	log.Printf("chicco: metrics on http://%s/metrics", addr)
+	if err := msrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Println("chicco: metrics server error:", err)
+	}
+}
+
+// serveHeadless - Serves the proxy with plain logging to stderr and no
+// dashboard, blocking until the listener fails.
+func serveHeadless(rot *Rotator, logs *logBuffer, cfg Config, opts Options, names []string) error {
+	log.SetOutput(io.MultiWriter(os.Stderr, logs)) // keep stderr; also feed the web dashboard
+	log.Printf("chicco %s listening on %s (%s) — rotating across %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(names), names)
+	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
+	return srv.ListenAndServe()
+}
+
+// serveDashboard - Serves the proxy in the background and runs the terminal
+// dashboard in the foreground, returning when the dashboard exits.
+func serveDashboard(rot *Rotator, logs *logBuffer, cfg Config, opts Options, names []string) error {
 	// Dashboard mode: logs flow into the on-screen pane, not stderr.
 	log.SetOutput(logs)
 	log.SetFlags(log.Ltime)
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
 	go func() {
-		log.Printf("chicco %s listening on %s (%s) — %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(active), names)
+		log.Printf("chicco %s listening on %s (%s) — %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(names), names)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Println("chicco: server error:", err)
 		}

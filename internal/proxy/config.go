@@ -2,12 +2,12 @@ package proxy
 
 import (
 	"fmt"
-	"os"
-	"sort"
-	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
+
+// config.go is the shape of chicco.yaml: the types, their YAML decoding and the
+// quota arithmetic derived from them.
 
 // DefaultAddr is the address chicco listens on when chicco.yaml sets no addr.
 // Loopback, not ":41986": the default config has no api_key, so a wildcard bind
@@ -95,7 +95,17 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 	c.Pricing = raw.Pricing
 	c.Alerts = raw.Alerts
 
-	n := &raw.Providers
+	providers, err := decodeProviders(&raw.Providers)
+	if err != nil {
+		return err
+	}
+	c.Providers = providers
+	return nil
+}
+
+// decodeProviders - Decodes the providers: node in either supported format,
+// keeping document order in both.
+func decodeProviders(n *yaml.Node) ([]Provider, error) {
 	// Unwrap a document node if present.
 	if n.Kind == yaml.DocumentNode && len(n.Content) == 1 {
 		n = n.Content[0]
@@ -103,46 +113,54 @@ func (c *Config) UnmarshalYAML(value *yaml.Node) error {
 
 	switch n.Kind {
 	case yaml.Kind(0): // absent / null — zero providers is fine
-		// nothing to do
+		return nil, nil
 
 	case yaml.SequenceNode:
 		// Original list format:
 		//   providers:
 		//     - name: groq
 		//       base_url: …
-		if err := n.Decode(&c.Providers); err != nil {
-			return fmt.Errorf("providers (list): %w", err)
+		var out []Provider
+		if err := n.Decode(&out); err != nil {
+			return nil, fmt.Errorf("providers (list): %w", err)
 		}
+		return out, nil
 
 	case yaml.MappingNode:
-		// Keyed map format:
-		//   providers:
-		//     groq:
-		//       base_url: …
-		// Mapping nodes are pairs: [key0, val0, key1, val1, …].
-		if len(n.Content)%2 != 0 {
-			return fmt.Errorf("providers: malformed mapping node")
-		}
-		c.Providers = make([]Provider, 0, len(n.Content)/2)
-		for i := 0; i < len(n.Content); i += 2 {
-			nameNode := n.Content[i]
-			valNode := n.Content[i+1]
-			var p Provider
-			if err := valNode.Decode(&p); err != nil {
-				return fmt.Errorf("provider %q: %w", nameNode.Value, err)
-			}
-			// Use the map key as the name when the entry itself has no name: field.
-			if p.Name == "" {
-				p.Name = nameNode.Value
-			}
-			c.Providers = append(c.Providers, p)
-		}
+		return decodeProviderMap(n)
 
 	default:
-		return fmt.Errorf("providers: expected a list or map, got YAML kind %v", n.Kind)
+		return nil, fmt.Errorf("providers: expected a list or map, got YAML kind %v", n.Kind)
 	}
+}
 
-	return nil
+// decodeProviderMap - Decodes the keyed map format:
+//
+//	providers:
+//	  groq:
+//	    base_url: …
+//
+// The map key becomes Provider.Name unless the entry sets one itself.
+func decodeProviderMap(n *yaml.Node) ([]Provider, error) {
+	// Mapping nodes are pairs: [key0, val0, key1, val1, …].
+	if len(n.Content)%2 != 0 {
+		return nil, fmt.Errorf("providers: malformed mapping node")
+	}
+	out := make([]Provider, 0, len(n.Content)/2)
+	for i := 0; i < len(n.Content); i += 2 {
+		nameNode := n.Content[i]
+		valNode := n.Content[i+1]
+		var p Provider
+		if err := valNode.Decode(&p); err != nil {
+			return nil, fmt.Errorf("provider %q: %w", nameNode.Value, err)
+		}
+		// Use the map key as the name when the entry itself has no name: field.
+		if p.Name == "" {
+			p.Name = nameNode.Value
+		}
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 // Quota holds the client-side rate-limit caps for a provider. All fields are
@@ -205,7 +223,14 @@ type Provider struct {
 // hour > minute (largest window first, so the bar tracks the most meaningful
 // hard cap). Returns quota=0 when no limits are configured.
 func (p Provider) effectiveQuota() (quota int64, isTokens bool, window string) {
-	q := p.Quota
+	return quotaBar(p.Quota)
+}
+
+// quotaBar - Resolves one Quota into the dashboard bar parameters. It is the
+// single copy of the day > hour > minute priority: Provider and Backend both
+// read it, and a window added to Quota that only one of them learned about
+// would draw two different bars for the same limit.
+func quotaBar(q Quota) (quota int64, isTokens bool, window string) {
 	switch {
 	case q.TPD > 0:
 		return q.TPD, true, "daily"
@@ -267,233 +292,5 @@ func (b Backend) effectiveQuota(fallback Quota) (quota int64, isTokens bool, win
 	if b.Quota != nil {
 		q = *b.Quota
 	}
-	switch {
-	case q.TPD > 0:
-		return q.TPD, true, "daily"
-	case q.RPD > 0:
-		return int64(q.RPD), false, "daily"
-	case q.TPH > 0:
-		return q.TPH, true, "hourly"
-	case q.RPH > 0:
-		return int64(q.RPH), false, "hourly"
-	case q.TPM > 0:
-		return q.TPM, true, "minutely"
-	case q.RPM > 0:
-		return int64(q.RPM), false, "minutely"
-	default:
-		return 0, false, "none"
-	}
-}
-
-// LoadConfig - Reads and parses chicco.yaml, defaulting the listen address and
-// expanding ${VAR} references in each provider's api_key from the environment.
-func LoadConfig(path string) (Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, fmt.Errorf("reading %s: %w", path, err)
-	}
-	var c Config
-	if err := yaml.Unmarshal(data, &c); err != nil {
-		return Config{}, fmt.Errorf("parsing %s: %w", path, err)
-	}
-	if c.Addr == "" {
-		c.Addr = DefaultAddr
-	}
-
-	// If providers were declared without a models: list (map format), populate
-	// Provider.Models from the models: routing table so the rest of the code
-	// (which requires at least one model per active provider) works unchanged.
-	resolveModels(&c)
-
-	if err := validateAliases(&c); err != nil {
-		return Config{}, fmt.Errorf("parsing %s: %w", path, err)
-	}
-
-	c.APIKey = os.ExpandEnv(c.APIKey)
-	// Expand ${VAR} in keys, CLI command/credential, and argv. Placeholders use
-	// {{double braces}}, so ExpandEnv leaves them untouched.
-	for i := range c.Providers {
-		p := &c.Providers[i]
-		p.APIKey = os.ExpandEnv(p.APIKey)
-		p.Command = os.ExpandEnv(p.Command)
-		p.Credential = os.ExpandEnv(p.Credential)
-
-		for j := range p.Args {
-			p.Args[j] = os.ExpandEnv(p.Args[j])
-		}
-		for j := range p.HealthCommand {
-			p.HealthCommand[j] = os.ExpandEnv(p.HealthCommand[j])
-		}
-	}
-	return c, nil
-}
-
-// resolveModels - Back-fills Provider.Models from the models: routing table for
-// providers that were declared without an inline models: list (the map format).
-// A backend entry's model name is added to its provider's Models slice, in the
-// order backends appear across all model definitions. Duplicates are skipped so
-// the same model referenced in several virtual models isn't added twice.
-func resolveModels(c *Config) {
-	if len(c.Models) == 0 {
-		return
-	}
-	// Build a name → index map for quick lookup.
-	idx := make(map[string]int, len(c.Providers))
-	for i, p := range c.Providers {
-		idx[p.Name] = i
-	}
-	// seen[providerName][modelName] prevents duplicates.
-	seen := make(map[string]map[string]bool)
-
-	for _, m := range c.Models {
-		for _, b := range m.Backends {
-			if b.Model == "" {
-				continue
-			}
-			i, ok := idx[b.Provider]
-			if !ok {
-				continue // backend references an unknown provider — skip silently
-			}
-			if seen[b.Provider] == nil {
-				seen[b.Provider] = make(map[string]bool)
-			}
-			if seen[b.Provider][b.Model] {
-				continue
-			}
-			seen[b.Provider][b.Model] = true
-			c.Providers[i].Models = append(c.Providers[i].Models, b.Model)
-		}
-	}
-}
-
-// knownOutputs / knownKinds are the accepted enum values, checked by Validate so a
-// typo (e.g. `kind: htpp`) is caught by `chicco -check` instead of silently
-// behaving like the default.
-var (
-	knownOutputs    = map[string]bool{"": true, "text": true, "json": true}
-	knownKinds      = map[string]bool{"": true, "http": true, "cli": true}
-	knownStrategies = map[string]bool{"": true, "order": true, "round_robin": true, "random": true, "weighted": true}
-)
-
-// Validate - Checks a loaded Config for mistakes that would make a provider
-// unusable or a field silently ignored, returning a human-readable problem for
-// each. It is what `chicco -check` reports; an empty result means the config is
-// sound. It does not open sockets or run any provider — a static check safe to
-// run in CI or a pre-commit hook. Problems prefixed "warning:" don't make the
-// config invalid (the provider is just skipped at startup); the rest are hard
-// errors.
-func (c Config) Validate() []string {
-	var problems []string
-	if c.Quota.RPM < 0 || c.Quota.RPH < 0 || c.Quota.RPD < 0 || c.Quota.TPM < 0 || c.Quota.TPH < 0 || c.Quota.TPD < 0 {
-		problems = append(problems, "quota: must not be negative")
-	}
-	for i, m := range c.Models {
-		where := m.ID
-		if where == "" {
-			where = fmt.Sprintf("models[%d]", i)
-		}
-		if !knownStrategies[m.Strategy] {
-			problems = append(problems, "model "+where+": unknown strategy "+strconv.Quote(m.Strategy)+
-				` (want "order", "round_robin", "random" or "weighted")`)
-		}
-		for _, b := range m.Backends {
-			if b.Weight != nil && *b.Weight < 0 {
-				problems = append(problems, "model "+where+": backend "+b.Provider+": weight must not be negative")
-			}
-		}
-	}
-	if len(c.Providers) == 0 {
-		return []string{"no providers configured"}
-	}
-	seen := map[string]bool{}
-	active := 0
-	for i, p := range c.Providers {
-		where := p.Name
-		if where == "" {
-			where = fmt.Sprintf("providers[%d]", i)
-			problems = append(problems, where+": missing name")
-		}
-		if p.Name != "" && seen[p.Name] {
-			problems = append(problems, where+": duplicate provider name")
-		}
-		seen[p.Name] = true
-
-		if !knownKinds[p.Kind] {
-			problems = append(problems, where+": unknown kind "+strconv.Quote(p.Kind)+` (want "http" or "cli")`)
-		}
-		if !knownOutputs[p.Output] {
-			problems = append(problems, where+": unknown output "+strconv.Quote(p.Output)+` (want "text" or "json")`)
-		}
-		if p.Output == "json" && p.ResultPath == "" {
-			problems = append(problems, where+`: output: json needs a result_path`)
-		}
-		if p.Quota.RPM < 0 || p.Quota.RPH < 0 || p.Quota.RPD < 0 || p.Quota.TPM < 0 || p.Quota.TPH < 0 || p.Quota.TPD < 0 {
-			problems = append(problems, where+": quota must not be negative")
-		}
-		if p.TimeoutSecs < 0 {
-			problems = append(problems, where+": timeout_seconds must not be negative")
-		}
-		if p.Weight < 0 {
-			problems = append(problems, where+": weight must not be negative")
-		}
-
-		if p.Kind == "cli" {
-			if p.Command == "" {
-				problems = append(problems, where+": kind: cli needs a command")
-			}
-		} else if p.BaseURL == "" {
-			problems = append(problems, where+": missing base_url")
-		}
-
-		// Would this provider actually route? (mirrors Rotator.Active)
-		switch {
-		case len(p.Models) == 0:
-			problems = append(problems, "warning: "+where+": no models — provider is inactive")
-		case p.Kind != "cli" && p.APIKey == "":
-			problems = append(problems, "warning: "+where+": no api_key (unset env var?) — provider is inactive")
-		default:
-			active++
-		}
-	}
-	if active == 0 {
-		problems = append(problems, "warning: no active providers (none have both models and, for http, an api_key)")
-	}
-	return problems
-}
-
-// validateAliases refuses an alias pointing at nothing.
-//
-// Caught at load rather than at request time on purpose: an alias that
-// silently falls through to full rotation is the failure the issue exists to
-// remove — the caller asked for a specific routing policy and would get an
-// arbitrary one, with nothing in the logs saying so. A typo in chicco.yaml
-// should stop the proxy starting, the same way a bad addr does.
-func validateAliases(c *Config) error {
-	if len(c.Aliases) == 0 {
-		return nil
-	}
-	known := make(map[string]bool, len(c.Models)+1)
-	known["chicco:auto"] = true
-	for _, m := range c.Models {
-		known[m.ID] = true
-	}
-	names := make([]string, 0, len(c.Aliases))
-	for name := range c.Aliases {
-		names = append(names, name)
-	}
-	sort.Strings(names) // deterministic message when several are wrong
-	for _, name := range names {
-		target := c.Aliases[name]
-		switch {
-		case target == "":
-			return fmt.Errorf("alias %q has no target", name)
-		case known[name]:
-			// Shadowing a real model id would make routing depend on lookup
-			// order, which is not something to leave to chance.
-			return fmt.Errorf("alias %q has the same name as a model", name)
-		case !known[target]:
-			return fmt.Errorf("alias %q points at %q, which is not a model in this config", name, target)
-		}
-	}
-	return nil
+	return quotaBar(q)
 }
