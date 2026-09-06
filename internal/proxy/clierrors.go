@@ -23,12 +23,15 @@ var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
 // the shape gemini-cli fails with when Google drops a client or tier: an auth
 // error that never says "login", and so used to read as a transient 502 and be
 // retried every minute forever instead of greying out.
-var authFailureRe = regexp.MustCompile(`(?i)(not logged in|/login|log ?in|sign ?in|unauthenticat|authenticating|authentication (failed|error)|ineligible|no longer supported|unauthorized|expired|invalid (api )?key|no credentials|forbidden|\b40[13]\b)`)
+var authFailureRe = regexp.MustCompile(`(?i)(not logged in|/login|log ?in|sign ` +
+	`?in|unauthenticat|authenticating|authentication (failed|error)|` +
+	`ineligible|no longer supported|unauthorized|expired|invalid (api )?key|no credentials|forbidden|\b40[13]\b)`)
 
 // rateLimitRe matches the messages CLIs print when a usage window is exhausted, so
 // the provider is cooled down until the window reopens (parseResetDuration) rather
 // than retried in a minute.
-var rateLimitRe = regexp.MustCompile(`(?i)(rate.?limit|usage limit|limit reached|reached your|too many requests|quota|credits?\s*(exhausted|used up|remaining: ?0)|out of (credits|messages)|try again|resets?\b)`)
+var rateLimitRe = regexp.MustCompile(`(?i)(rate.?limit|usage limit|limit reached|reached your|too many ` +
+	`requests|quota|credits?\s*(exhausted|used up|remaining: ?0)|out of (credits|messages)|try again|resets?\b)`)
 
 // rateLimitCooldown is the fallback cooldown when a CLI says it's limited but gives
 // no parseable reset time.

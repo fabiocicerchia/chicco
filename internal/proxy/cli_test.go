@@ -29,7 +29,8 @@ func TestSplitMessages(t *testing.T) {
 func TestDotGetAndExtract(t *testing.T) {
 	p := Provider{Output: "json", ResultPath: "result", TokensPath: "usage.output_tokens",
 		InTokensPath: "usage.input_tokens"}
-	text, tokens, in, failed := extractCompletion(p, []byte(`{"result":"done","usage":{"output_tokens":42,"input_tokens":7}}`))
+	text, tokens, in, failed := extractCompletion(p,
+		[]byte(`{"result":"done","usage":{"output_tokens":42,"input_tokens":7}}`))
 	if text != "done" || tokens != 42 || in != 7 || failed {
 		t.Errorf("extractCompletion = %q, %d, %d, %v; want done, 42, 7, false", text, tokens, in, failed)
 	}
@@ -94,7 +95,11 @@ func TestRunCLIEndToEnd(t *testing.T) {
 		wantSSE            bool
 	}{
 		{"stream omitted", `{"model":"x","messages":[{"role":"user","content":"hi"}]}`, "application/json", false},
-		{"stream false", `{"model":"x","stream":false,"messages":[{"role":"user","content":"hi"}]}`, "application/json", false},
+		{
+			"stream false",
+			`{"model":"x","stream":false,"messages":[{"role":"user","content":"hi"}]}`,
+			"application/json", false,
+		},
 		{"stream true", `{"model":"x","stream":true,"messages":[{"role":"user","content":"hi"}]}`, "text/event-stream", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -209,7 +214,10 @@ func TestToolsSkipCLIProviders(t *testing.T) {
 	}))
 	defer working.Close()
 
-	cli := Provider{Name: "cli", Kind: "cli", Command: "sh", Args: []string{"-c", "printf narrated"}, Models: []string{"m"}}
+	cli := Provider{
+		Name: "cli", Kind: "cli", Command: "sh",
+		Args: []string{"-c", "printf narrated"}, Models: []string{"m"},
+	}
 	payload := func() map[string]any {
 		return map[string]any{
 			"messages": []any{map[string]any{"role": "user", "content": "hi"}},
@@ -268,11 +276,17 @@ func TestProbeCLI(t *testing.T) {
 		t.Errorf("missing credential = %v, want HealthAuth", got)
 	}
 	// health_expect: output must contain the marker, else auth (logged out).
-	logged := Provider{Kind: "cli", HealthCommand: []string{"sh", "-c", `echo '{"loggedIn": true}'`}, HealthExpect: `"loggedIn": true`}
+	logged := Provider{
+		Kind: "cli", HealthCommand: []string{"sh", "-c", `echo '{"loggedIn": true}'`},
+		HealthExpect: `"loggedIn": true`,
+	}
 	if got, _ := probeCLI(ctx, logged); got != HealthOK {
 		t.Errorf("health_expect matched = %v, want HealthOK", got)
 	}
-	out := Provider{Kind: "cli", HealthCommand: []string{"sh", "-c", `echo '{"loggedIn": false}'`}, HealthExpect: `"loggedIn": true`}
+	out := Provider{
+		Kind: "cli", HealthCommand: []string{"sh", "-c", `echo '{"loggedIn": false}'`},
+		HealthExpect: `"loggedIn": true`,
+	}
 	if got, _ := probeCLI(ctx, out); got != HealthAuth {
 		t.Errorf("health_expect missing = %v, want HealthAuth", got)
 	}

@@ -55,7 +55,8 @@ func (s *jsonSink) closeBlock() {
 		if json.Unmarshal([]byte(raw), &input) != nil {
 			input = map[string]any{}
 		}
-		s.content = append(s.content, map[string]any{"type": "tool_use", "id": s.curTool.id, "name": s.curTool.name, "input": input})
+		s.content = append(s.content,
+			map[string]any{"type": "tool_use", "id": s.curTool.id, "name": s.curTool.name, "input": input})
 		s.curTool = nil
 	}
 }

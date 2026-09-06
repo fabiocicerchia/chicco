@@ -218,7 +218,8 @@ func modelRow(dot, name, kind, model, usage, reqs, tail string, header bool) str
 		return cell("  "+name, 20) + cell(kind, 5) + cell(model, 24) + cell(usage, 18) + cell(reqs, 9) + "USAGE"
 	}
 	// dot (styled, 1 col) + space fills the first 2 cols; name fills the next 18.
-	return dot + " " + cell(name, 18) + dimStyle.Render(cell(kind, 5)) + dimStyle.Render(cell(model, 24)) + cell(usage, 18) + cell(reqs, 9) + tail
+	return dot + " " + cell(name, 18) + dimStyle.Render(cell(kind, 5)) +
+		dimStyle.Render(cell(model, 24)) + cell(usage, 18) + cell(reqs, 9) + tail
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────

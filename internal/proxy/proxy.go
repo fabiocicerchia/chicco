@@ -201,7 +201,8 @@ func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		data = append(data, modelObj{ID: name, Object: "model", Created: now, OwnedBy: "chicco (alias for " + aliases[name] + ")"})
+		data = append(data,
+			modelObj{ID: name, Object: "model", Created: now, OwnedBy: "chicco (alias for " + aliases[name] + ")"})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, map[string]any{"object": "list", "data": data})

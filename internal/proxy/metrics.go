@@ -169,7 +169,9 @@ func (m *metrics) write(w io.Writer, blocked int) {
 
 	writeCounter(w, "chicco_requests_total", "Successful upstream requests, by provider and model.", "model", m.requests)
 	writeCounter(w, "chicco_tokens_total", "Tokens reported by upstream, by provider and model.", "model", m.tokens)
-	writeCounter(w, "chicco_upstream_errors_total", "Failed upstream requests, by provider and HTTP status (\"transport\" when there was none).", "status", m.errors)
+	writeCounter(w, "chicco_upstream_errors_total",
+		"Failed upstream requests, by provider and HTTP status (\"transport\" when there was none).", "status",
+		m.errors)
 	writeCounter(w, "chicco_provider_blocks_total", "Times a provider entered cooldown, by reason.", "reason", m.blocks)
 
 	if len(m.latency) > 0 {

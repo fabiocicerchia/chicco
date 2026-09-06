@@ -65,7 +65,9 @@ func dispatchStatus(err error) int {
 // carrying tool definitions (a CLI backend is handed the conversation as one
 // plain-text prompt and narrates the call in prose with finish_reason "stop",
 // which an agent cannot tell from a refusal and reports as "no changes made").
-func (r *Rotator) candidatesFor(requestedModel string, payload map[string]any, upstreamPath string) ([]Provider, string, error) {
+func (
+	r *Rotator,
+) candidatesFor(requestedModel string, payload map[string]any, upstreamPath string) ([]Provider, string, error) {
 	active, strategy := r.activeForModel(requestedModel)
 	if upstreamPath == "/embeddings" {
 		active = slices.DeleteFunc(active, func(p Provider) bool { return p.Kind == "cli" })
@@ -78,7 +80,8 @@ func (r *Rotator) candidatesFor(requestedModel string, payload map[string]any, u
 	if len(active) == 0 {
 		msg := "chicco: no providers configured with an API key and models"
 		if wantsTools {
-			msg = "chicco: request sends 'tools' but every provider for this model is CLI-backed; CLI providers return plain text and cannot emit tool calls"
+			msg = "chicco: request sends 'tools' but every provider for this model is CLI-backed; CLI providers return plain " +
+				"text and cannot emit tool calls"
 		}
 		// No Retry-After: a config with no usable backend for this request is not
 		// something waiting fixes.
@@ -121,7 +124,9 @@ func (r *Rotator) blockRejected(p Provider, model string, up *upstream, took tim
 // handleChat, handleMessages and handleEmbeddings so failover/cooldown/quota
 // logic lives in exactly one place regardless of which wire format the caller
 // used.
-func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload map[string]any, upstreamPath string) (*dispatchResult, error) {
+func (r *Rotator) dispatch(
+	ctx context.Context, requestedModel string, payload map[string]any, upstreamPath string,
+) (*dispatchResult, error) {
 	active, strategy, err := r.candidatesFor(requestedModel, payload, upstreamPath)
 	if err != nil {
 		return nil, err

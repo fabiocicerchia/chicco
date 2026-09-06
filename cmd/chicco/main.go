@@ -27,7 +27,8 @@ var version = "dev"
 func main() {
 	cfgPath := flag.String("config", "chicco.yaml", "path to the chicco.yaml config file")
 	addr := flag.String("addr", "", "listen address (overrides chicco.yaml; default "+proxy.DefaultAddr+")")
-	statePath := flag.String("state", "chicco-state.json", "token-usage state file, persisted across runs (empty to disable)")
+	statePath := flag.String("state", "chicco-state.json",
+		"token-usage state file, persisted across runs (empty to disable)")
 	headless := flag.Bool("headless", false, "disable the dashboard and log plainly to stderr")
 	check := flag.Bool("check", false, "validate the config and exit (no server, no port bound)")
 	showVersion := flag.Bool("version", false, "print version and exit")

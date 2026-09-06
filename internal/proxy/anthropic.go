@@ -33,7 +33,8 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 	}
 	payload, requestedModel, wantStream, err := anthropicToOpenAI(body)
 	if err != nil {
-		writeAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "chicco: invalid Anthropic request: "+err.Error())
+		writeAnthropicError(w, http.StatusBadRequest, "invalid_request_error",
+			"chicco: invalid Anthropic request: "+err.Error())
 		return
 	}
 
