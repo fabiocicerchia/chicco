@@ -63,8 +63,7 @@ func TestRotationFailover(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",
-		strings.NewReader(`{"model":"whatever","messages":[]}`))
+	resp, err := httpPost(t, srv.URL+"/v1/chat/completions", strings.NewReader(`{"model":"whatever","messages":[]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
@@ -103,8 +102,7 @@ func TestEmbeddingsSkipsCLI(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/embeddings", "application/json",
-		strings.NewReader(`{"model":"chicco:auto","input":"hi"}`))
+	resp, err := httpPost(t, srv.URL+"/v1/embeddings", strings.NewReader(`{"model":"chicco:auto","input":"hi"}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
@@ -137,8 +135,7 @@ func TestModelOverride(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",
-		strings.NewReader(`{"model":"ignored","messages":[]}`))
+	resp, err := httpPost(t, srv.URL+"/v1/chat/completions", strings.NewReader(`{"model":"ignored","messages":[]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}
@@ -158,7 +155,7 @@ func TestModelsEndpoint(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/v1/models")
+	resp, err := httpGet(t, srv.URL+"/v1/models")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -209,7 +206,7 @@ func TestModelsEndpointHidesDeadModels(t *testing.T) {
 
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
-	resp, err := http.Get(srv.URL + "/v1/models")
+	resp, err := httpGet(t, srv.URL+"/v1/models")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -241,7 +238,7 @@ func TestInboundAuth(t *testing.T) {
 	defer srv.Close()
 
 	get := func(path, auth string) int {
-		req, _ := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+path, nil)
 		if auth != "" {
 			req.Header.Set("Authorization", auth)
 		}
@@ -270,7 +267,7 @@ func TestInboundAuth(t *testing.T) {
 	// a cookie that then authenticates the page and its /v1/status polling.
 	jar, _ := cookiejar.New(nil)
 	browser := &http.Client{Jar: jar}
-	resp, err := browser.Get(srv.URL + "/dashboard?key=wrong")
+	resp, err := httpGetWith(t, browser, srv.URL+"/dashboard?key=wrong")
 	if err != nil {
 		t.Fatalf("GET /dashboard: %v", err)
 	}
@@ -278,7 +275,7 @@ func TestInboundAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("/dashboard?key=wrong = %d, want 401", resp.StatusCode)
 	}
-	resp, err = browser.Get(srv.URL + "/dashboard?key=s3cret")
+	resp, err = httpGetWith(t, browser, srv.URL+"/dashboard?key=s3cret")
 	if err != nil {
 		t.Fatalf("GET /dashboard: %v", err)
 	}
@@ -286,7 +283,7 @@ func TestInboundAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("/dashboard?key=s3cret = %d, want 200 after the cookie redirect", resp.StatusCode)
 	}
-	resp, err = browser.Get(srv.URL + "/v1/status")
+	resp, err = httpGetWith(t, browser, srv.URL+"/v1/status")
 	if err != nil {
 		t.Fatalf("GET /v1/status: %v", err)
 	}
@@ -299,7 +296,7 @@ func TestInboundAuth(t *testing.T) {
 	open := NewRotator([]Provider{{Name: "a", BaseURL: "http://x", APIKey: "k", Models: []string{"m"}}}, nil)
 	osrv := httptest.NewServer(Handler(open, nil))
 	defer osrv.Close()
-	resp, err = http.Get(osrv.URL + "/v1/models")
+	resp, err = httpGet(t, osrv.URL+"/v1/models")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -323,7 +320,7 @@ func TestHealthBody(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/health")
+	resp, err := httpGet(t, srv.URL+"/health")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -344,7 +341,7 @@ func TestHealthBody(t *testing.T) {
 
 	// Every provider unusable → still 200, but the body says degraded.
 	rot.setHealth("good", HealthDown)
-	resp2, err := http.Get(srv.URL + "/health")
+	resp2, err := httpGet(t, srv.URL+"/health")
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
@@ -388,8 +385,7 @@ func TestGlobalQuotaCapsAcrossProviders(t *testing.T) {
 	defer srv.Close()
 
 	post := func() int {
-		resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",
-			strings.NewReader(`{"model":"whatever","messages":[]}`))
+		resp, err := httpPost(t, srv.URL+"/v1/chat/completions", strings.NewReader(`{"model":"whatever","messages":[]}`))
 		if err != nil {
 			t.Fatalf("POST: %v", err)
 		}
@@ -425,7 +421,7 @@ func TestExhaustedRetryAfter(t *testing.T) {
 		{"/v1/chat/completions", `{"model":"m","messages":[{"role":"user","content":"hi"}]}`},
 		{"/v1/messages", `{"model":"m","max_tokens":100,"messages":[{"role":"user","content":"hi"}]}`},
 	} {
-		resp, err := http.Post(srv.URL+tc.path, "application/json", strings.NewReader(tc.body))
+		resp, err := httpPost(t, srv.URL+tc.path, strings.NewReader(tc.body))
 		if err != nil {
 			t.Fatalf("POST %s: %v", tc.path, err)
 		}

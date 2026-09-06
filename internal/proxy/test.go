@@ -95,6 +95,8 @@ func testOne(ctx context.Context, p Provider, model string) testResult {
 	if p.Kind == "cli" {
 		up, err = runCLI(cctx, p, model, payload)
 	} else {
+		//nolint:errcheck // a literal map of strings and numbers: Marshal only
+		// fails on an unsupported type or a cycle, and neither is reachable here
 		body, _ := json.Marshal(payload)
 		up, err = forward(cctx, p, body, "/chat/completions")
 	}
@@ -102,6 +104,8 @@ func testOne(ctx context.Context, p Provider, model string) testResult {
 		return testResult{status: http.StatusBadGateway, errMsg: err.Error()}
 	}
 	if up.status < 200 || up.status >= 300 {
+		//nolint:errcheck // a snippet for the operator; a failed read has
+		// nothing to show, which is what the empty string says
 		snippet, _ := io.ReadAll(io.LimitReader(up.body, 300))
 		up.body.Close()
 		return testResult{status: up.status, retryAfter: up.retryAfter, errMsg: strings.TrimSpace(string(snippet))}

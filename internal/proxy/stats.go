@@ -43,7 +43,7 @@ type ProviderStat struct {
 func (r *Rotator) Snapshot() []ProviderStat {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
+	now := now()
 	out := make([]ProviderStat, len(r.providers))
 	for i, p := range r.providers {
 		var left time.Duration

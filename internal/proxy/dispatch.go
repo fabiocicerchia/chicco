@@ -93,6 +93,8 @@ func (r *Rotator) candidatesFor(requestedModel string, payload map[string]any, u
 // up.body: the reply is not going to the caller.
 func (r *Rotator) blockRejected(p Provider, model string, up *upstream, took time.Duration) string {
 	r.metrics.observeError(p.Name, strconv.Itoa(up.status), took)
+	//nolint:errcheck // a snippet for the operator; a failed read has
+	// nothing to show, which is what the empty string says
 	snippet, _ := io.ReadAll(io.LimitReader(up.body, cliErrSnippet))
 	_ = up.body.Close()
 	text := strings.TrimSpace(string(snippet))
@@ -143,7 +145,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 		// HTTP providers POST upstream; CLI providers run a subprocess. Both return
 		// the same `upstream` so the rest of the loop is identical.
 		var up *upstream
-		started := time.Now()
+		started := now()
 		if p.Kind == "cli" {
 			up, err = runCLI(ctx, p, model, payload)
 		} else {
@@ -193,7 +195,7 @@ func (r *Rotator) dispatch(ctx context.Context, requestedModel string, payload m
 func (r *Rotator) blockedSummary(active []Provider) (string, time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
+	now := now()
 	if until, ok := r.blocked[globalKey]; ok && now.Before(until) {
 		left := until.Sub(now)
 		return fmt.Sprintf("the global quota: is exhausted, resets in %s", left.Round(time.Second)), left
@@ -249,7 +251,8 @@ func forward(ctx context.Context, p Provider, body []byte, path string) (*upstre
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.APIKey)
-	resp, err := http.DefaultClient.Do(req) //nolint:bodyclose // body ownership passes to upstream; stream()/handleChat close it
+	//nolint:bodyclose // body ownership passes to upstream; stream()/handleChat close it
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -271,6 +274,7 @@ func stream(w http.ResponseWriter, up *upstream) Usage {
 		w.Header().Set("Content-Type", up.contentType)
 	}
 	w.WriteHeader(http.StatusOK)
+	//nolint:errcheck // a writer that cannot flush is handled as nil below
 	flusher, _ := w.(http.Flusher)
 	// Lines can be large (a whole non-streamed JSON body, or one SSE event), so
 	// give the reader a generous buffer.

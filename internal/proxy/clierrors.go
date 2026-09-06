@@ -94,6 +94,8 @@ func parseResetDuration(msg string) time.Duration {
 	if strings.Contains(clause, " in ") || strings.HasPrefix(clause, "in ") {
 		var total time.Duration
 		for _, u := range resetUnitRe.FindAllStringSubmatch(clause, -1) {
+			//nolint:errcheck // the regex matched digits; an overflowing count
+			// reads as 0, which this loop already treats as "no number here"
 			n, _ := strconv.Atoi(u[1])
 			switch u[2][0] {
 			case 'h':
@@ -122,10 +124,12 @@ func clockReset(s string) time.Duration {
 	if m == nil || m[1] == "" {
 		return 0
 	}
+	//nolint:errcheck // both groups are digits from the regex above; an
+	// unparseable one reads as 0, and 0 is a valid hour and minute
 	hour, _ := strconv.Atoi(m[1])
 	min := 0
 	if m[2] != "" {
-		min, _ = strconv.Atoi(m[2])
+		min, _ = strconv.Atoi(m[2]) //nolint:errcheck // see above
 	}
 	switch m[3] {
 	case "pm":
@@ -140,7 +144,7 @@ func clockReset(s string) time.Duration {
 	if hour > 23 || min > 59 {
 		return 0
 	}
-	now := time.Now()
+	now := now()
 	target := time.Date(now.Year(), now.Month(), now.Day(), hour, min, 0, 0, now.Location())
 	if !target.After(now) {
 		target = target.Add(24 * time.Hour) // already passed today → tomorrow

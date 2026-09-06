@@ -31,7 +31,7 @@ func TestMessagesNonStreaming(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"claude-x","max_tokens":100,"messages":[{"role":"user","content":"hi"}]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
@@ -88,7 +88,7 @@ func TestMessagesStreaming(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"claude-x","max_tokens":100,"stream":true,"messages":[{"role":"user","content":"hi"}]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
@@ -129,7 +129,7 @@ func TestMessagesToolUse(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"claude-x","max_tokens":100,"messages":[{"role":"user","content":"weather?"}],`+
 			`"tools":[{"name":"get_weather","input_schema":{"type":"object"}}]}`))
 	if err != nil {
@@ -183,7 +183,7 @@ func TestMessagesSharesFailoverState(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"whatever","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)

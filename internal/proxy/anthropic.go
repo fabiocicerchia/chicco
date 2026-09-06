@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -71,7 +70,7 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 func writeAnthropicError(w http.ResponseWriter, status int, kind, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, map[string]any{
 		"type":  "error",
 		"error": map[string]any{"type": kind, "message": msg},
 	})

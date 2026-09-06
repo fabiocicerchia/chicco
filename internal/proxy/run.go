@@ -207,7 +207,11 @@ func serveDashboard(rot *Rotator, logs *logBuffer, cfg Config, opts Options, nam
 	if _, err := tea.NewProgram(newUIModel(rot, logs, cfg.Addr), tea.WithAltScreen()).Run(); err != nil {
 		return fmt.Errorf("dashboard error: %w", err)
 	}
-	_ = srv.Close()
-	_ = rot.Persist() // final flush on clean exit
+	_ = srv.Close() //nolint:errcheck // shutting down; there is nothing left to tell
+	if err := rot.Persist(); err != nil {
+		// The next start would silently forget every cooldown and quota
+		// counter, which is the whole reason the file exists.
+		log.Println("chicco: could not save rotation state:", err)
+	}
 	return nil
 }

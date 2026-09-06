@@ -154,7 +154,7 @@ func TestAliasesAreListedOnTheModelsEndpoint(t *testing.T) {
 	r.aliases = cfg.Aliases
 
 	rec := httptest.NewRecorder()
-	r.handleModels(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	r.handleModels(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/models", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}

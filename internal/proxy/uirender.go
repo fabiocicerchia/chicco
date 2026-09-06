@@ -27,7 +27,7 @@ func (m uiModel) renderModels(w, h int, scroll int, focused bool) string {
 		titleStyle.Render("chicco") + dimStyle.Render(fmt.Sprintf(
 			" · %s · %d providers · today: %d req · %s tokens across %d active",
 			m.addr, len(stats), reqToday, fmtTok(tokToday), activeN)),
-		headerStyle.Render(modelRow("", "STATUS", "KIND", "MODEL", "USED / QUOTA", "REQS", "", contentW, true)),
+		headerStyle.Render(modelRow("", "STATUS", "KIND", "MODEL", "USED / QUOTA", "REQS", "", true)),
 	}
 	// Collect all provider rows, then apply scroll.
 	maxRows := innerH - len(header) - 1 // reserve last line for legend
@@ -208,7 +208,9 @@ func scrollbarColumn(total, visible, offset, trackHeight int) []string {
 // kind, model, usage and reqs are plain text (truncated + padded — never
 // wrapped, which would break the row); the dot and tail carry their own ANSI
 // and are placed as-is.
-func modelRow(dot, name, kind, model, usage, reqs, tail string, width int, header bool) string {
+// The columns are fixed: this row does not adapt to the terminal width,
+// and taking a width it never reads only suggested otherwise.
+func modelRow(dot, name, kind, model, usage, reqs, tail string, header bool) string {
 	cell := func(s string, w int) string {
 		return padRight(truncate(s, w-1), w) // w-1 so a truncated cell keeps a 1-space column gap
 	}
@@ -253,7 +255,7 @@ func renderBar(pct float64, width int) string {
 // fmtReset - Renders when a usage window reopens (now + remaining): a clock
 // time for a same-day reset, otherwise a dated time.
 func fmtReset(left time.Duration) string {
-	t := time.Now().Add(left)
+	t := now().Add(left)
 	if left < 12*time.Hour {
 		return t.Format("15:04")
 	}

@@ -102,7 +102,7 @@ func TestRunCLIEndToEnd(t *testing.T) {
 			srv := httptest.NewServer(Handler(rot, nil))
 			defer srv.Close()
 
-			resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json", strings.NewReader(c.body))
+			resp, err := httpPost(t, srv.URL+"/v1/chat/completions", strings.NewReader(c.body))
 			if err != nil {
 				t.Fatalf("POST: %v", err)
 			}
@@ -145,7 +145,7 @@ func TestRunCLIViaAnthropicEndpointGetsThePrompt(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"m1","max_tokens":16,"system":"be terse","messages":[{"role":"user","content":"ping"}]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
@@ -181,8 +181,7 @@ func TestRunCLIFailureFailsOver(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/chat/completions", "application/json",
-		strings.NewReader(`{"model":"x","messages":[]}`))
+	resp, err := httpPost(t, srv.URL+"/v1/chat/completions", strings.NewReader(`{"model":"x","messages":[]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
 	}

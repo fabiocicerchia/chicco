@@ -21,6 +21,9 @@ type sseSink struct {
 // reply in one lump and the caller could not tell it from a non-streaming one.
 // Write errors are ignored deliberately — the client going away mid-stream is
 // ordinary, and there is no second channel to report it on.
+// left mid-stream is ordinary and there is no second channel to report on.
+//
+//nolint:errcheck // deliberate, per the paragraph above: a client that
 func writeSSEEvent(w http.ResponseWriter, flusher http.Flusher, event string, data map[string]any) {
 	_, _ = io.WriteString(w, "event: "+event+"\n")
 	b, _ := json.Marshal(data)
@@ -107,6 +110,7 @@ func respondAnthropicStream(w http.ResponseWriter, up *upstream) int64 {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
+	//nolint:errcheck // a writer that cannot flush is handled as nil below
 	flusher, _ := w.(http.Flusher)
 	return translateOpenAIStream(up.body, &sseSink{w: w, flusher: flusher})
 }

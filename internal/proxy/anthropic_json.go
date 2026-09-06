@@ -80,7 +80,7 @@ func respondAnthropicJSON(w http.ResponseWriter, up *upstream) int64 {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, map[string]any{
 		"id": sink.id, "type": "message", "role": "assistant",
 		"content": sink.content, "model": sink.model,
 		"stop_reason": sink.stopReason, "stop_sequence": nil,
