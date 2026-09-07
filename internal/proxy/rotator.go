@@ -13,6 +13,9 @@ import (
 // Health is a provider's liveness as seen by the boot probe / live requests.
 type Health int
 
+// The health states, in the order the boot probe can move through them.
+// Unknown is routable: a provider that has not been probed yet is given
+// the benefit of the doubt rather than held back.
 const (
 	HealthUnknown Health = iota // not yet probed (dashboard shows a "checking" dot)
 	HealthOK                    // endpoint answered and the key was accepted
@@ -134,7 +137,7 @@ func NewRotator(providers []Provider, models []Model) *Rotator {
 		alerts:        newAlerter(AlertConfig{}),
 		// Weighted provider pick and tie shuffle only — nothing here is a secret,
 		// a token or a nonce, so math/rand is the right tool. //nolint:gosec
-		rng: rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec // load balancing, not security
+		rng: rand.New(rand.NewSource(now().UnixNano())), //nolint:gosec // load balancing, not security
 	}
 }
 
@@ -168,7 +171,7 @@ func (r *Rotator) recordUsage(name, model string, tokens int64) {
 	r.metrics.observeTokens(name, model, tokens)
 	// After the counters move, not before: the check reads the same totals the
 	// rate limiter does, so it must see this request.
-	r.checkBudgets(time.Now())
+	r.checkBudgets(now())
 }
 
 // resolveAlias maps a caller-facing name onto the virtual model it stands for,
@@ -225,7 +228,7 @@ func (r *Rotator) Active() []Provider {
 // label and is persisted so a long window limit survives a restart.
 func (r *Rotator) block(name string, d time.Duration, reason string) {
 	r.mu.Lock()
-	r.blocked[name] = time.Now().Add(d)
+	r.blocked[name] = now().Add(d)
 	r.reason[name] = reason
 	r.dirty = true
 	r.mu.Unlock()

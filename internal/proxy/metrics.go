@@ -137,7 +137,7 @@ func escape(s string) string {
 
 // writeCounter emits one counter family, sorted so the output is stable — a
 // diffable /metrics is worth the sort on a map this small.
-func writeCounter(w io.Writer, name, help, l1, l2 string, vals map[providerModel]uint64) {
+func writeCounter(w io.Writer, name, help, label2 string, vals map[providerModel]uint64) {
 	if len(vals) == 0 {
 		return
 	}
@@ -153,7 +153,9 @@ func writeCounter(w io.Writer, name, help, l1, l2 string, vals map[providerModel
 		return keys[i].b < keys[j].b
 	})
 	for _, k := range keys {
-		fmt.Fprintf(w, "%s{%s=\"%s\",%s=\"%s\"} %d\n", name, l1, escape(k.a), l2, escape(k.b), vals[k])
+		// The first label is always the provider: that is what providerModel
+		// is keyed by. Only the second one varies between families.
+		fmt.Fprintf(w, "%s{provider=\"%s\",%s=\"%s\"} %d\n", name, escape(k.a), label2, escape(k.b), vals[k])
 	}
 }
 
@@ -165,10 +167,12 @@ func (m *metrics) write(w io.Writer, blocked int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	writeCounter(w, "chicco_requests_total", "Successful upstream requests, by provider and model.", "provider", "model", m.requests)
-	writeCounter(w, "chicco_tokens_total", "Tokens reported by upstream, by provider and model.", "provider", "model", m.tokens)
-	writeCounter(w, "chicco_upstream_errors_total", "Failed upstream requests, by provider and HTTP status (\"transport\" when there was none).", "provider", "status", m.errors)
-	writeCounter(w, "chicco_provider_blocks_total", "Times a provider entered cooldown, by reason.", "provider", "reason", m.blocks)
+	writeCounter(w, "chicco_requests_total", "Successful upstream requests, by provider and model.", "model", m.requests)
+	writeCounter(w, "chicco_tokens_total", "Tokens reported by upstream, by provider and model.", "model", m.tokens)
+	writeCounter(w, "chicco_upstream_errors_total",
+		"Failed upstream requests, by provider and HTTP status (\"transport\" when there was none).", "status",
+		m.errors)
+	writeCounter(w, "chicco_provider_blocks_total", "Times a provider entered cooldown, by reason.", "reason", m.blocks)
 
 	if len(m.latency) > 0 {
 		const n = "chicco_upstream_latency_seconds"
@@ -201,7 +205,7 @@ func (m *metrics) write(w io.Writer, blocked int) {
 func (r *Rotator) blockedCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
+	now := now()
 	n := 0
 	for _, until := range r.blocked {
 		if until.After(now) {

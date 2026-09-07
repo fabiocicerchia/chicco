@@ -55,7 +55,8 @@ func (s *jsonSink) closeBlock() {
 		if json.Unmarshal([]byte(raw), &input) != nil {
 			input = map[string]any{}
 		}
-		s.content = append(s.content, map[string]any{"type": "tool_use", "id": s.curTool.id, "name": s.curTool.name, "input": input})
+		s.content = append(s.content,
+			map[string]any{"type": "tool_use", "id": s.curTool.id, "name": s.curTool.name, "input": input})
 		s.curTool = nil
 	}
 }
@@ -80,7 +81,7 @@ func respondAnthropicJSON(w http.ResponseWriter, up *upstream) int64 {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, map[string]any{
 		"id": sink.id, "type": "message", "role": "assistant",
 		"content": sink.content, "model": sink.model,
 		"stop_reason": sink.stopReason, "stop_sequence": nil,

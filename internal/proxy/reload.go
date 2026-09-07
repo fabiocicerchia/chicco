@@ -102,7 +102,7 @@ func forget[V any](m map[string]V, keep map[string]bool) {
 // reload — the running config is kept — while warnings (inactive providers,
 // unknown regions) are logged. On success it re-probes health so added
 // providers get a dot. Returns whether the reload was applied.
-func reloadFromFile(rot *Rotator, path string) bool {
+func reloadFromFile(ctx context.Context, rot *Rotator, path string) bool {
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		log.Printf("chicco: reload failed, keeping current config: %v", err)
@@ -123,7 +123,7 @@ func reloadFromFile(rot *Rotator, path string) bool {
 		return false
 	}
 	rot.Reload(cfg)
-	go rot.CheckHealth(context.Background())
+	go rot.CheckHealth(ctx)
 	log.Printf("chicco: config reloaded from %s (%d provider(s))", path, len(cfg.Providers))
 	return true
 }

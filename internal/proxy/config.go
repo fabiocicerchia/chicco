@@ -212,9 +212,10 @@ type Provider struct {
 	ErrorPath     string   `yaml:"error_path"`        // optional dotted path; if truthy the call failed (fail over)
 	StripANSI     bool     `yaml:"strip_ansi"`        // strip ANSI escapes from output (kiro)
 	HealthCommand []string `yaml:"health_command"`    // run for health; exit 0 (and HealthExpect, if set) = healthy
-	HealthExpect  string   `yaml:"health_expect"`     // require this substring in HealthCommand output, else HealthAuth (logged out)
-	Credential    string   `yaml:"credential"`        // optional file to stat for health (use ${HOME}/…)
-	TimeoutSecs   int      `yaml:"timeout_seconds"`   // CLI run timeout (default 120)
+	// require this substring in HealthCommand output, else HealthAuth (logged out)
+	HealthExpect string `yaml:"health_expect"`
+	Credential   string `yaml:"credential"`      // optional file to stat for health (use ${HOME}/…)
+	TimeoutSecs  int    `yaml:"timeout_seconds"` // CLI run timeout (default 120)
 }
 
 // effectiveQuota - Derives the dashboard bar parameters from the quota fields.

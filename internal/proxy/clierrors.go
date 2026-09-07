@@ -23,12 +23,15 @@ var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
 // the shape gemini-cli fails with when Google drops a client or tier: an auth
 // error that never says "login", and so used to read as a transient 502 and be
 // retried every minute forever instead of greying out.
-var authFailureRe = regexp.MustCompile(`(?i)(not logged in|/login|log ?in|sign ?in|unauthenticat|authenticating|authentication (failed|error)|ineligible|no longer supported|unauthorized|expired|invalid (api )?key|no credentials|forbidden|\b40[13]\b)`)
+var authFailureRe = regexp.MustCompile(`(?i)(not logged in|/login|log ?in|sign ` +
+	`?in|unauthenticat|authenticating|authentication (failed|error)|` +
+	`ineligible|no longer supported|unauthorized|expired|invalid (api )?key|no credentials|forbidden|\b40[13]\b)`)
 
 // rateLimitRe matches the messages CLIs print when a usage window is exhausted, so
 // the provider is cooled down until the window reopens (parseResetDuration) rather
 // than retried in a minute.
-var rateLimitRe = regexp.MustCompile(`(?i)(rate.?limit|usage limit|limit reached|reached your|too many requests|quota|credits?\s*(exhausted|used up|remaining: ?0)|out of (credits|messages)|try again|resets?\b)`)
+var rateLimitRe = regexp.MustCompile(`(?i)(rate.?limit|usage limit|limit reached|reached your|too many ` +
+	`requests|quota|credits?\s*(exhausted|used up|remaining: ?0)|out of (credits|messages)|try again|resets?\b)`)
 
 // rateLimitCooldown is the fallback cooldown when a CLI says it's limited but gives
 // no parseable reset time.
@@ -94,6 +97,8 @@ func parseResetDuration(msg string) time.Duration {
 	if strings.Contains(clause, " in ") || strings.HasPrefix(clause, "in ") {
 		var total time.Duration
 		for _, u := range resetUnitRe.FindAllStringSubmatch(clause, -1) {
+			//nolint:errcheck // the regex matched digits; an overflowing count
+			// reads as 0, which this loop already treats as "no number here"
 			n, _ := strconv.Atoi(u[1])
 			switch u[2][0] {
 			case 'h':
@@ -122,10 +127,12 @@ func clockReset(s string) time.Duration {
 	if m == nil || m[1] == "" {
 		return 0
 	}
+	//nolint:errcheck // both groups are digits from the regex above; an
+	// unparseable one reads as 0, and 0 is a valid hour and minute
 	hour, _ := strconv.Atoi(m[1])
 	min := 0
 	if m[2] != "" {
-		min, _ = strconv.Atoi(m[2])
+		min, _ = strconv.Atoi(m[2]) //nolint:errcheck // see above
 	}
 	switch m[3] {
 	case "pm":
@@ -140,7 +147,7 @@ func clockReset(s string) time.Duration {
 	if hour > 23 || min > 59 {
 		return 0
 	}
-	now := time.Now()
+	now := now()
 	target := time.Date(now.Year(), now.Month(), now.Day(), hour, min, 0, 0, now.Location())
 	if !target.After(now) {
 		target = target.Add(24 * time.Hour) // already passed today → tomorrow

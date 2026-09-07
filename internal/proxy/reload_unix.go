@@ -20,7 +20,7 @@ func watchSIGHUP(ctx context.Context, rot *Rotator, path string) {
 		for {
 			select {
 			case <-ch:
-				reloadFromFile(rot, path)
+				reloadFromFile(ctx, rot, path)
 			case <-ctx.Done():
 				signal.Stop(ch)
 				return

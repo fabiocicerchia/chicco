@@ -99,7 +99,7 @@ func runCLI(ctx context.Context, p Provider, model string, payload map[string]an
 		promptTokens = int64(len(prompt) / 4)
 	}
 
-	stream, _ := payload["stream"].(bool)
+	stream := field[bool](payload, "stream")
 	return cliUpstream(model, text, promptTokens, tokens, stream), nil
 }
 
@@ -129,8 +129,13 @@ func cliRun(ctx context.Context, p Provider, args []string, prompt, outFile stri
 		return nil, msg
 	}
 	if p.OutputFile {
-		raw, _ = os.ReadFile(outFile)
-		return raw, ""
+		out, err := os.ReadFile(outFile)
+		if err != nil {
+			// Exited 0 and wrote nothing: an empty completion would look like a
+			// model that had nothing to say.
+			return nil, "reading the provider's output file: " + err.Error()
+		}
+		return out, ""
 	}
 	return stdout.Bytes(), ""
 }
@@ -158,12 +163,12 @@ func cliUpstream(model, text string, promptTokens, tokens int64, stream bool) *u
 // splitMessages - Pulls the system prompt and the joined user/assistant turns
 // out of an OpenAI messages array (decoded as a map).
 func splitMessages(payload map[string]any) (system, user string) {
-	msgs, _ := payload["messages"].([]any)
+	msgs := field[[]any](payload, "messages")
 	var turns []string
 	for _, mi := range msgs {
-		m, _ := mi.(map[string]any)
-		role, _ := m["role"].(string)
-		content, _ := m["content"].(string)
+		m := asObject(mi)
+		role := field[string](m, "role")
+		content := field[string](m, "content")
 		if role == "system" {
 			if system != "" {
 				system += "\n\n"
