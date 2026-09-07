@@ -56,7 +56,7 @@ func (r *Rotator) EnablePersistence(path string) {
 	maps.Copy(r.modelTokens, s.ModelTokens)
 	maps.Copy(r.modelRequests, s.ModelRequests)
 	// Restore only cooldowns that haven't elapsed yet.
-	now := time.Now()
+	now := now()
 	for k, v := range s.Blocked {
 		if v.After(now) {
 			r.blocked[k] = v
@@ -74,7 +74,7 @@ func (r *Rotator) Persist() error {
 		r.mu.Unlock()
 		return nil
 	}
-	now := time.Now()
+	now := now()
 	s := persistedState{
 		EventLogs:     make(map[string][]event, len(r.eventLogs)),
 		ModelTokens:   maps.Clone(r.modelTokens),

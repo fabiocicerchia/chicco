@@ -88,7 +88,8 @@ var (
 	quotaBodyRe = regexp.MustCompile(`(?i)(quota|credit|billing|insufficient|exhaust|payment|spend|top ?up|upgrade)`)
 	// `.` not `[^.]`: model ids contain dots (@cf/moonshotai/kimi-k2.7-code), which
 	// is exactly the id that slipped through and cost the provider an hour.
-	modelBodyRe = regexp.MustCompile(`(?i)model.{0,100}?(not available|not found|does not exist|unsupported|invalid|no access|not supported)` +
+	modelBodyRe = regexp.MustCompile(`(?i)model.{0,100}?(not available|not found|does not exist|unsupported|invalid|no ` +
+		`access|not supported)` +
 		`|(?i)(invalid|unknown|unsupported).{0,20}model`)
 )
 

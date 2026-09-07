@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"strconv"
-	"time"
 )
 
 // clisynth.go synthesizes the OpenAI JSON and SSE bodies a CLI provider's plain
@@ -15,10 +14,12 @@ import (
 // clients require (id/object/created/model/finish_reason) rather than the bare
 // choices array the SSE path gets away with.
 func synthJSON(model, text string, promptTokens, tokens int64) []byte {
+	//nolint:errcheck // a literal map of strings and numbers: Marshal only
+	// fails on an unsupported type or a cycle, and neither is reachable here
 	out, _ := json.Marshal(map[string]any{
 		"id":      synthID(),
 		"object":  "chat.completion",
-		"created": time.Now().Unix(),
+		"created": now().Unix(),
 		"model":   model,
 		"choices": []any{map[string]any{
 			"index":         0,
@@ -39,7 +40,9 @@ func synthJSON(model, text string, promptTokens, tokens int64) []byte {
 func synthSSE(model, text string, promptTokens, tokens int64) []byte {
 	var b bytes.Buffer
 	id := synthID()
-	created := time.Now().Unix()
+	created := now().Unix()
+	//nolint:errcheck // a literal map of strings and numbers: Marshal only
+	// fails on an unsupported type or a cycle, and neither is reachable here
 	chunk, _ := json.Marshal(map[string]any{
 		"id":      id,
 		"object":  "chat.completion.chunk",
@@ -55,6 +58,8 @@ func synthSSE(model, text string, promptTokens, tokens int64) []byte {
 	b.Write(chunk)
 	b.WriteString("\n\n")
 	if tokens > 0 || promptTokens > 0 {
+		//nolint:errcheck // a literal map of strings and numbers: Marshal only
+		// fails on an unsupported type or a cycle, and neither is reachable here
 		usage, _ := json.Marshal(map[string]any{
 			"id":      id,
 			"object":  "chat.completion.chunk",
@@ -75,7 +80,7 @@ func synthSSE(model, text string, promptTokens, tokens int64) []byte {
 // Prefixed so a synthesized id is recognisable as chicco's in a log, and
 // nanosecond-based so two replies in the same second do not collide.
 func synthID() string {
-	return "chatcmpl-chicco-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	return "chatcmpl-chicco-" + strconv.FormatInt(now().UnixNano(), 36)
 }
 
 // synthUsage - Builds the usage block for a CLI provider, which reports no

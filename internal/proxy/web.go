@@ -25,5 +25,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	//nolint:errcheck // the status is already on the wire; a failed write
+	// has no second channel to report on
 	_, _ = w.Write(dashboardHTML)
 }

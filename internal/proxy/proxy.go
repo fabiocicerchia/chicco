@@ -77,7 +77,7 @@ func (r *Rotator) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		status = "degraded"
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "providers": providers})
+	writeJSON(w, map[string]any{"status": status, "providers": providers})
 }
 
 // handleStatus - Returns a handler that serves GET /v1/status as JSON
@@ -155,7 +155,7 @@ func (r *Rotator) handleStatus(logs *logBuffer) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		writeJSON(w, map[string]any{
 			"providers":        providers,
 			"logs":             logLines,
 			"requests_today":   reqToday,
@@ -179,7 +179,7 @@ func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	ids := r.VirtualModelIDs()
-	now := time.Now().Unix()
+	now := now().Unix()
 	type modelObj struct {
 		ID      string `json:"id"`
 		Object  string `json:"object"`
@@ -201,10 +201,37 @@ func (r *Rotator) handleModels(w http.ResponseWriter, req *http.Request) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		data = append(data, modelObj{ID: name, Object: "model", Created: now, OwnedBy: "chicco (alias for " + aliases[name] + ")"})
+		data = append(data,
+			modelObj{ID: name, Object: "model", Created: now, OwnedBy: "chicco (alias for " + aliases[name] + ")"})
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data})
+	writeJSON(w, map[string]any{"object": "list", "data": data})
+}
+
+// field - One field of a decoded JSON object as a T, or T's zero value.
+//
+// A request body the proxy does not fully understand is relayed, not rejected:
+// a missing or wrong-typed field means "the caller did not ask for this",
+// which is exactly T's zero value.
+func field[T any](m map[string]any, k string) T {
+	v, _ := m[k].(T) //nolint:errcheck // the zero value is the missing-field case; see above
+	return v
+}
+
+// asObject - One decoded JSON value as an object, or an empty one. Same rule
+// as field: a non-object where an object was expected reads as absent.
+func asObject(v any) map[string]any {
+	o, _ := v.(map[string]any) //nolint:errcheck // see field
+	return o
+}
+
+// writeJSON - Encodes v as the response body.
+//
+// The status line and headers are already on the wire by the time this runs,
+// so a write that fails has no second channel to be reported on: the client
+// went away, and the request is over either way.
+func writeJSON(w http.ResponseWriter, v any) {
+	_ = json.NewEncoder(w).Encode(v) //nolint:errcheck // see above
 }
 
 // readPostedJSON - Reads and decodes the JSON body of an OpenAI-shaped POST,
@@ -245,13 +272,13 @@ func (r *Rotator) handleChat(w http.ResponseWriter, req *http.Request) {
 	// Ask the upstream to append a final usage chunk so we can count tokens for
 	// the dashboard. Harmless to providers that don't support it (extra field),
 	// and to the caller (the chunk has empty choices, which clients ignore).
-	if s, _ := payload["stream"].(bool); s {
+	if field[bool](payload, "stream") {
 		if _, ok := payload["stream_options"]; !ok {
 			payload["stream_options"] = map[string]any{"include_usage": true}
 		}
 	}
 
-	requestedModel, _ := payload["model"].(string)
+	requestedModel := field[string](payload, "model")
 	res, err := r.dispatch(req.Context(), requestedModel, payload, "/chat/completions")
 	if err != nil {
 		setRetryAfter(w, err)
@@ -275,7 +302,7 @@ func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	requestedModel, _ := payload["model"].(string)
+	requestedModel := field[string](payload, "model")
 	res, err := r.dispatch(req.Context(), requestedModel, payload, "/embeddings")
 	if err != nil {
 		setRetryAfter(w, err)
@@ -293,7 +320,9 @@ func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
 			TotalTokens int64 `json:"total_tokens"`
 		} `json:"usage"`
 	}
-	_ = json.Unmarshal(respBody, &parsed)
+	// Accounting only: the body is relayed verbatim below whatever this
+	// finds, and a reply we cannot read the usage out of counts as 0.
+	_ = json.Unmarshal(respBody, &parsed) //nolint:errcheck // see above
 	r.recordUsage(res.provider, res.model, parsed.Usage.TotalTokens)
 	log.Printf("chicco: %s (%s) served embeddings, %d tokens%s", res.provider, res.model,
 		parsed.Usage.TotalTokens,
@@ -305,6 +334,8 @@ func (r *Rotator) handleEmbeddings(w http.ResponseWriter, req *http.Request) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(res.up.status)
+	//nolint:errcheck // the status is already on the wire; a failed write
+	// has no second channel to report on
 	_, _ = w.Write(respBody)
 }
 
@@ -331,7 +362,7 @@ func setRetryAfter(w http.ResponseWriter, err error) {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, map[string]any{
 		"error": map[string]any{"message": msg, "type": "chicco_error"},
 	})
 }

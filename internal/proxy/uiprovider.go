@@ -31,7 +31,7 @@ func providerRows(s ProviderStat, width int) []string {
 			rows = append(rows, modelRow(dot, s.Name, s.Kind, ms.Name,
 				q.usage(s.UsedTokens, s.Requests),
 				fmt.Sprintf("req %d", s.Requests),
-				tail, width, false))
+				tail, false))
 			continue
 		}
 		// Continuation rows: blank name/kind, model name in the MODEL column —
@@ -41,7 +41,7 @@ func providerRows(s ProviderStat, width int) []string {
 		rows = append(rows, modelRow(" ", "", "", ms.Name,
 			usage,
 			fmt.Sprintf("req %d", ms.Requests),
-			mtail, width, false))
+			mtail, false))
 	}
 	return rows
 }

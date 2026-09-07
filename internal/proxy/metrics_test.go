@@ -50,7 +50,7 @@ func parseExposition(t *testing.T, body string) map[string]float64 {
 func scrape(t *testing.T, r *Rotator) (string, map[string]float64) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	r.MetricsHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	r.MetricsHandler().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -133,7 +133,7 @@ func TestMetricsLabelsAreEscaped(t *testing.T) {
 func TestMetricsHandlerRejectsWrites(t *testing.T) {
 	r := NewRotator(nil, nil)
 	rec := httptest.NewRecorder()
-	r.MetricsHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/metrics", nil))
+	r.MetricsHandler().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/metrics", nil))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("POST /metrics = %d, want 405", rec.Code)
 	}

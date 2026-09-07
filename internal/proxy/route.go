@@ -116,7 +116,7 @@ func (r *Rotator) activeForModel(requested string) (providers []Provider, strate
 func (r *Rotator) pick(active []Provider, strategy string) (Provider, string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
+	now := now()
 
 	// Global cap check (optional top-level quota:) — once per pick(), not once
 	// per provider, since it isn't provider-specific. Trips exactly like a

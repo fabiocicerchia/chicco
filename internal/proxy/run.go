@@ -184,7 +184,9 @@ func serveMetrics(rot *Rotator, addr string) {
 // dashboard, blocking until the listener fails.
 func serveHeadless(rot *Rotator, logs *logBuffer, cfg Config, opts Options, names []string) error {
 	log.SetOutput(io.MultiWriter(os.Stderr, logs)) // keep stderr; also feed the web dashboard
-	log.Printf("chicco %s listening on %s (%s) — rotating across %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(names), names)
+	log.Printf("chicco %s listening on %s (%s) — rotating across %d provider(s): %v",
+		opts.Version, cfg.Addr, authState(cfg.APIKey), len(names),
+		names)
 	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
 	return srv.ListenAndServe()
 }
@@ -198,7 +200,9 @@ func serveDashboard(rot *Rotator, logs *logBuffer, cfg Config, opts Options, nam
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: Handler(rot, logs), ReadHeaderTimeout: readHeaderTimeout}
 	go func() {
-		log.Printf("chicco %s listening on %s (%s) — %d provider(s): %v", opts.Version, cfg.Addr, authState(cfg.APIKey), len(names), names)
+		log.Printf("chicco %s listening on %s (%s) — %d provider(s): %v",
+			opts.Version, cfg.Addr, authState(cfg.APIKey), len(names),
+			names)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Println("chicco: server error:", err)
 		}
@@ -207,7 +211,11 @@ func serveDashboard(rot *Rotator, logs *logBuffer, cfg Config, opts Options, nam
 	if _, err := tea.NewProgram(newUIModel(rot, logs, cfg.Addr), tea.WithAltScreen()).Run(); err != nil {
 		return fmt.Errorf("dashboard error: %w", err)
 	}
-	_ = srv.Close()
-	_ = rot.Persist() // final flush on clean exit
+	_ = srv.Close() //nolint:errcheck // shutting down; there is nothing left to tell
+	if err := rot.Persist(); err != nil {
+		// The next start would silently forget every cooldown and quota
+		// counter, which is the whole reason the file exists.
+		log.Println("chicco: could not save rotation state:", err)
+	}
 	return nil
 }

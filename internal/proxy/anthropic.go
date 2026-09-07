@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -34,7 +33,8 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 	}
 	payload, requestedModel, wantStream, err := anthropicToOpenAI(body)
 	if err != nil {
-		writeAnthropicError(w, http.StatusBadRequest, "invalid_request_error", "chicco: invalid Anthropic request: "+err.Error())
+		writeAnthropicError(w, http.StatusBadRequest, "invalid_request_error",
+			"chicco: invalid Anthropic request: "+err.Error())
 		return
 	}
 
@@ -71,7 +71,7 @@ func (r *Rotator) handleMessages(w http.ResponseWriter, req *http.Request) {
 func writeAnthropicError(w http.ResponseWriter, status int, kind, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, map[string]any{
 		"type":  "error",
 		"error": map[string]any{"type": kind, "message": msg},
 	})

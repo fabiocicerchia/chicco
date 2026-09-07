@@ -20,7 +20,8 @@ func TestMessagesNonStreaming(t *testing.T) {
 		}
 		io.WriteString(w, "data: {\"id\":\"chatcmpl-1\",\"model\":\"m\",\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n")
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
-		io.WriteString(w, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n")
+		io.WriteString(w,
+			"data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n")
 		io.WriteString(w, "data: [DONE]\n\n")
 	}))
 	defer upstream.Close()
@@ -31,7 +32,7 @@ func TestMessagesNonStreaming(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"claude-x","max_tokens":100,"messages":[{"role":"user","content":"hi"}]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
@@ -77,7 +78,8 @@ func TestMessagesStreaming(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		io.WriteString(w, "data: {\"id\":\"chatcmpl-1\",\"model\":\"m\",\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n")
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
-		io.WriteString(w, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n")
+		io.WriteString(w,
+			"data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n")
 		io.WriteString(w, "data: [DONE]\n\n")
 	}))
 	defer upstream.Close()
@@ -88,7 +90,7 @@ func TestMessagesStreaming(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"claude-x","max_tokens":100,"stream":true,"messages":[{"role":"user","content":"hi"}]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
@@ -115,9 +117,15 @@ func TestMessagesStreaming(t *testing.T) {
 // Anthropic tool_use content block with the accumulated JSON input parsed.
 func TestMessagesToolUse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		io.WriteString(w, "data: {\"id\":\"chatcmpl-1\",\"model\":\"m\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]}}]}\n\n")
-		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\":\"}}]}}]}\n\n")
-		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"NYC\\\"}\"}}]}}]}\n\n")
+		io.WriteString(w,
+			"data: {\"id\":\"chatcmpl-1\",\"model\":\"m\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"+
+				"\"id\":\"call_1\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]}}]}\n\n")
+		io.WriteString(w,
+			"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"+
+				"\"function\":{\"arguments\":\"{\\\"city\\\":\"}}]}}]}\n\n")
+		io.WriteString(w,
+			"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"+
+				"\"function\":{\"arguments\":\"\\\"NYC\\\"}\"}}]}}]}\n\n")
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n")
 		io.WriteString(w, "data: [DONE]\n\n")
 	}))
@@ -129,7 +137,7 @@ func TestMessagesToolUse(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"claude-x","max_tokens":100,"messages":[{"role":"user","content":"weather?"}],`+
 			`"tools":[{"name":"get_weather","input_schema":{"type":"object"}}]}`))
 	if err != nil {
@@ -183,7 +191,7 @@ func TestMessagesSharesFailoverState(t *testing.T) {
 	srv := httptest.NewServer(Handler(rot, nil))
 	defer srv.Close()
 
-	resp, err := http.Post(srv.URL+"/v1/messages", "application/json",
+	resp, err := httpPost(t, srv.URL+"/v1/messages",
 		strings.NewReader(`{"model":"whatever","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}`))
 	if err != nil {
 		t.Fatalf("POST: %v", err)
@@ -226,7 +234,8 @@ func TestAnthropicToOpenAI(t *testing.T) {
 	// []map[string]any here silently gave every CLI provider an empty prompt.
 	raw, ok := payload["messages"].([]any)
 	if !ok {
-		t.Fatalf("messages is %T, want []any (CLI providers assert []any and get an empty prompt otherwise)", payload["messages"])
+		t.Fatalf("messages is %T, want []any (CLI providers assert []any and get an empty prompt otherwise)",
+			payload["messages"])
 	}
 	messages := make([]map[string]any, len(raw))
 	for i, m := range raw {

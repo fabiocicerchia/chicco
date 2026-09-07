@@ -28,7 +28,7 @@ type eventLog struct {
 
 // record - Appends a new event to the ring buffer.
 func (el *eventLog) record(tokens int64) {
-	el.buf[el.head] = event{At: time.Now(), Tokens: tokens}
+	el.buf[el.head] = event{At: now(), Tokens: tokens}
 	el.head = (el.head + 1) % maxEvents
 	if el.size < maxEvents {
 		el.size++
@@ -38,7 +38,7 @@ func (el *eventLog) record(tokens int64) {
 // totals - Returns the sum of requests and tokens whose timestamp falls within
 // the last `window` duration (e.g. time.Minute, time.Hour, 24*time.Hour).
 func (el *eventLog) totals(window time.Duration) (reqs int, tokens int64) {
-	cutoff := time.Now().Add(-window)
+	cutoff := now().Add(-window)
 	for i := 0; i < el.size; i++ {
 		e := el.buf[i]
 		if e.At.After(cutoff) {
@@ -52,7 +52,7 @@ func (el *eventLog) totals(window time.Duration) (reqs int, tokens int64) {
 // dailyTotals - Returns requests and tokens since UTC midnight today, used for
 // the dashboard quota bar's "daily" window (see Provider.effectiveQuota).
 func (el *eventLog) dailyTotals() (reqs int, tokens int64) {
-	now := time.Now().UTC()
+	now := now().UTC()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	for i := 0; i < el.size; i++ {
 		e := el.buf[i]
@@ -91,7 +91,7 @@ func (el *eventLog) windowTotals(window string) (reqs int, tokens int64) {
 // the maximum blocked-until time so every active limit is respected. Pass the
 // per-model quota when available; fall back to the provider quota otherwise.
 func (el *eventLog) check(q Quota) time.Time {
-	now := time.Now()
+	now := now()
 	var blockedUntil time.Time
 
 	// enforce checks one (limit, window) pair. If the rolling-window count of
@@ -146,7 +146,7 @@ func (el *eventLog) toSlice() []event {
 // loadSlice - Replaces the ring buffer contents with the given slice, ignoring
 // entries older than 25 hours (they can never affect any rate-limit window).
 func (el *eventLog) loadSlice(events []event) {
-	cutoff := time.Now().Add(-25 * time.Hour)
+	cutoff := now().Add(-25 * time.Hour)
 	el.head = 0
 	el.size = 0
 	for _, e := range events {
