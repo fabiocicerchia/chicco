@@ -1,0 +1,11 @@
+{
+  "Exclude": [
+    "^LICENSE$",
+    "^README\\.md$",
+    "^cmd/chicco/main\\.go$",
+    "^internal/proxy/alias_test\\.go$"
+  ],
+  "Disable": {
+    "IndentSize": true
+  }
+}

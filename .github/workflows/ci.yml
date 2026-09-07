@@ -31,6 +31,14 @@ jobs:
         with:
           version: v2.13.2
 
+      # The action above only downloads the binary and adds it to PATH;
+      # without the run step nothing is ever checked.
+      - uses: editorconfig-checker/action-editorconfig-checker@d2ed4fd072ae6f887e9407c909af0f585d2ad9f4  # v2
+        with:
+          version: v3.11.3
+      - name: editorconfig
+        run: editorconfig-checker
+
   vuln:
     runs-on: ubuntu-latest
     steps:
