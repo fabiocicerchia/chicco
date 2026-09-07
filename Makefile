@@ -45,8 +45,8 @@ clean: ## Remove build artifacts
 ##@ Quality
 
 .PHONY: lint
-lint: ## Run golangci-lint (falls back to go vet)
-	@golangci-lint run ./... 2>/dev/null || go vet ./...
+lint: ## Run the whole gate — every hook, every file
+	pre-commit run --all-files
 
 # -race, always: the rotator, the event logs and the dashboard all read the
 # same state from different goroutines, so a green run without it proves less
@@ -64,3 +64,11 @@ docker-build: ## Build the chicco:latest image (see docs/DOCKER.md to run it)
 .PHONY: snapshot
 snapshot: ## Build a local unpublished release with GoReleaser
 	goreleaser release --snapshot --clean
+
+.PHONY: format
+format: ## Rewrite the sources to gofmt form
+	gofmt -w .
+
+.PHONY: analyze
+analyze: ## Lint with the house rule set
+	golangci-lint run ./...
