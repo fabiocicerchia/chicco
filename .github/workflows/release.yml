@@ -30,6 +30,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # goreleaser cuts the release as a draft (`release.draft` in
+      # .goreleaser.yaml) so that it can attach the archives, the OS packages,
+      # the SBOMs and the signatures to it. Immutable releases freeze a
+      # release's assets the moment it is published, so publishing comes last —
+      # if any of the above failed, the release stays a draft, which is
+      # recoverable, rather than published and missing an asset, which is not.
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false
+
   docker:
     runs-on: ubuntu-latest
     permissions:

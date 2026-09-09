@@ -33,6 +33,40 @@ archives:
       - LICENSE
       - CHANGELOG.md
       - chicco.yaml
+      - src: man/*.1
+        dst: man
+
+# The OS packages. One binary, one man page, the licence and the readme — laid
+# out where a packager expects them rather than in a tarball to unpack. Only the
+# linux builds are packaged; nfpm has nothing to say about darwin or windows.
+nfpms:
+  - id: chicco
+    package_name: chicco
+    vendor: Fabio Cicerchia
+    homepage: https://github.com/fabiocicerchia/chicco
+    maintainer: Fabio Cicerchia <info@fabiocicerchia.it>
+    description: Local OpenAI- and Anthropic-compatible rotation proxy
+    license: MIT
+    formats: [deb, rpm, apk, archlinux]
+    bindir: /usr/bin
+    section: utils
+    contents:
+      - src: man/chicco.1
+        dst: /usr/share/man/man1/chicco.1
+        file_info:
+          mode: 0644
+      - src: LICENSE
+        dst: /usr/share/doc/chicco/LICENSE
+        file_info:
+          mode: 0644
+      - src: README.md
+        dst: /usr/share/doc/chicco/README.md
+        file_info:
+          mode: 0644
+      - src: chicco.yaml
+        dst: /usr/share/doc/chicco/chicco.yaml.example
+        file_info:
+          mode: 0644
 
 checksum:
   name_template: "checksums.txt"
@@ -69,6 +103,10 @@ release:
   github:
     owner: fabiocicerchia
     name: chicco
+  # Created unpublished so the workflow can attach assets to it: immutable
+  # releases reject uploads once a release is published. The workflow flips it
+  # to published as its last step.
+  draft: true
   prerelease: auto
   footer: |
     ## Verify the download

@@ -1,0 +1,69 @@
+.TH CHICCO 1 "2026-09" "chicco" "User Commands"
+.SH NAME
+chicco \- local OpenAI- and Anthropic-compatible rotation proxy
+.SH SYNOPSIS
+.B chicco
+.RI [ flags ]
+.SH DESCRIPTION
+.B chicco
+serves one endpoint \(em chat completions, messages and embeddings \(em and
+forwards each request to the next provider in
+.IR chicco.yaml ,
+rotating models and skipping providers that run out of quota, so that a single
+stable endpoint fronts a pool of free-tier tokens.
+.PP
+Providers may be HTTP APIs or local CLI tools. Both OpenAI- and Anthropic-SDK
+clients point straight at the address chicco serves, with no code changes.
+Embeddings rotate across HTTP providers only, since CLI backends return text
+rather than vectors.
+.SH OPTIONS
+.TP
+.BI \-config " PATH"
+Path to the
+.I chicco.yaml
+config file (default
+.IR chicco.yaml ).
+.TP
+.BI \-addr " ADDR"
+Listen address, overriding
+.IR chicco.yaml .
+.TP
+.BI \-state " PATH"
+Where rotation state is kept across restarts (default
+.IR chicco-state.json ).
+.TP
+.B \-headless
+Disable the dashboard and log plainly to standard error.
+.TP
+.B \-check
+Validate the config and exit. No server is started and no port is bound.
+.TP
+.B \-version
+Print the version and exit.
+.SH FILES
+.TP
+.I chicco.yaml
+Provider pool: endpoints, models and credentials.
+.TP
+.I chicco-state.json
+Rotation state, so a restart does not go back to an exhausted provider.
+.SH EXAMPLES
+.PP
+Serve the pool on a fixed port:
+.PP
+.RS
+.B chicco \-config chicco.yaml \-addr :41986
+.RE
+.PP
+Then point an OpenAI client's base URL at
+.IR http://127.0.0.1:41986/v1 .
+.PP
+Check a config without binding anything:
+.PP
+.RS
+.B chicco \-check \-config chicco.yaml
+.RE
+.SH SEE ALSO
+Project documentation:
+.UR https://github.com/fabiocicerchia/chicco
+.UE

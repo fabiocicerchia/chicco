@@ -31,8 +31,31 @@ build: ## Compile the binary into ./bin
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BIN) ./cmd/chicco
 
 .PHONY: install
-install: ## go install into GOBIN
+## install: install the binary and its man page; PREFIX=/usr/local for a system path
+install:
+ifeq ($(strip $(PREFIX)),)
 	go install -ldflags "$(LDFLAGS)" ./cmd/chicco
+	install -d "$(USER_MANDIR)"
+	install -m 0644 man/$(BIN).1 "$(USER_MANDIR)/$(BIN).1"
+	@dir="$$(go env GOBIN)"; [ -n "$$dir" ] || dir="$$(go env GOPATH)/bin"; \
+		echo "installed $$dir/$(BIN) and $(USER_MANDIR)/$(BIN).1"
+else
+	@$(MAKE) build
+	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/man/man1"
+	install -m 0755 bin/$(BIN) "$(DESTDIR)$(PREFIX)/bin/$(BIN)"
+	install -m 0644 man/$(BIN).1 "$(DESTDIR)$(PREFIX)/share/man/man1/$(BIN).1"
+	@echo "installed $(DESTDIR)$(PREFIX)/bin/$(BIN)"
+endif
+
+## uninstall: remove what `make install` put down
+uninstall:
+ifeq ($(strip $(PREFIX)),)
+	@dir="$$(go env GOBIN)"; [ -n "$$dir" ] || dir="$$(go env GOPATH)/bin"; \
+		rm -f "$$dir/$(BIN)" "$(USER_MANDIR)/$(BIN).1"
+else
+	rm -f "$(DESTDIR)$(PREFIX)/bin/$(BIN)" \
+		"$(DESTDIR)$(PREFIX)/share/man/man1/$(BIN).1"
+endif
 
 .PHONY: run
 run: ## Run chicco (pass args with ARGS="...")
