@@ -3,6 +3,7 @@
     "^LICENSE$",
     "^README\\.md$",
     "^cmd/chicco/main\\.go$",
+    "^cmd/chicco/main_test\\.go$",
     "^internal/proxy/alias_test\\.go$"
   ],
   "Disable": {
