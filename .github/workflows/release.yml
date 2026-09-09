@@ -40,7 +40,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release edit "${{ github.ref_name }}" --draft=false
+          # Through the environment, not interpolated into the script: `github`
+          # context data is untrusted input as far as a `run:` step is concerned.
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --draft=false
 
   docker:
     runs-on: ubuntu-latest
