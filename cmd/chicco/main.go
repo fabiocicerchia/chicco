@@ -31,6 +31,7 @@ func main() {
 		"token-usage state file, persisted across runs (empty to disable)")
 	headless := flag.Bool("headless", false, "disable the dashboard and log plainly to stderr")
 	check := flag.Bool("check", false, "validate the config and exit (no server, no port bound)")
+	strict := flag.Bool("strict", false, "with -check: fail on warnings too, e.g. a provider that cannot activate")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Usage = usage
 	flag.Parse()
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	if *check {
-		os.Exit(checkConfig(*cfgPath))
+		os.Exit(checkConfig(*cfgPath, *strict))
 	}
 
 	if err := proxy.Run(proxy.Options{
@@ -60,7 +61,13 @@ func main() {
 // printing each problem, and returns the process exit code (0 = sound, 1 =
 // failed). Warnings (inactive providers) are printed but don't fail the check
 // on their own — only a parse error or a hard validation problem does.
-func checkConfig(path string) int {
+//
+// strict makes them fail it. An unset key is normal on a developer's machine
+// and in CI, which is why it is not the default; but "starts with half the
+// providers the config declares" is rarely what a deployment meant, and
+// nothing else notices — chicco runs, rotates over what is left, and the
+// missing capacity only shows up as unexplained cooldowns.
+func checkConfig(path string, strict bool) int {
 	cfg, err := proxy.LoadConfig(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "chicco:", err)
@@ -78,7 +85,7 @@ func checkConfig(path string) int {
 			hardErrors = true
 		}
 	}
-	if hardErrors {
+	if hardErrors || strict {
 		return 1
 	}
 	return 0

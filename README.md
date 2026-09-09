@@ -193,6 +193,8 @@ Flags:
     	disable the dashboard and log plainly to stderr
   -state string
     	token-usage state file, persisted across runs (empty to disable) (default "chicco-state.json")
+  -strict
+    	with -check: fail on warnings too, e.g. a provider that cannot activate
   -version
     	print version and exit
 
@@ -204,7 +206,11 @@ to this address).
 ```
 
 `-check` is the one to reach for first: it parses the config, expands the
-environment variables and exits, without binding a port.
+environment variables and exits, without binding a port. It exits non-zero on a
+hard error only — a provider that drops out for a missing key is a warning,
+because an unset key is normal on a laptop and in CI. Add `-strict` where it
+isn't: a deployment that declares four providers and starts with two is a
+config error, and nothing downstream says so.
 
 ## Common errors
 
