@@ -76,14 +76,15 @@ sboms:
   - artifacts: archive
 
 # Keyless cosign signature over checksums.txt — verifying the checksum then
-# verifies every artifact it lists.
+# verifies every artifact it lists. cosign v3 emits a Sigstore bundle, which
+# carries the signature and the signing certificate in a single file; the old
+# --output-signature/--output-certificate pair is ignored under that format.
 signs:
   - cmd: cosign
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.bundle"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
     artifacts: checksum
@@ -142,8 +143,7 @@ release:
 
     ```sh
     cosign verify-blob \
-      --certificate checksums.txt.pem \
-      --signature checksums.txt.sig \
+      --bundle checksums.txt.bundle \
       --certificate-identity-regexp 'https://github.com/fabiocicerchia/chicco' \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
       checksums.txt
