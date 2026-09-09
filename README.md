@@ -250,6 +250,22 @@ They are chicco's own bookkeeping against the `quota:` you declared, persisted
 in `chicco-state.json`; nothing reads the provider's real counter. If the two
 disagree, the declared window is the thing to correct.
 
+## Verify the download
+
+Every release is signed with [cosign][cosign], keyless: the identity is the
+workflow that published it, not a key anybody holds.
+
+```sh
+cosign verify-blob \
+  --bundle checksums.txt.bundle \
+  --certificate-identity-regexp 'https://github.com/fabiocicerchia/chicco' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+```
+
+[cosign]: https://docs.sigstore.dev/
+
 ## Documentation
 
 Full docs live in [`docs/`](docs/). Runnable examples live in [`examples/`](examples/).

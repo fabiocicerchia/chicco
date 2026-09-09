@@ -110,6 +110,10 @@ changelog:
 homebrew_casks:
   - name: chicco
     binaries: [chicco]
+    # With the release pipe disabled goreleaser cannot derive this, and
+    # refuses rather than guessing.
+    url:
+      template: "https://github.com/fabiocicerchia/chicco/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     manpages: [man/chicco.1]
     homepage: https://github.com/fabiocicerchia/chicco
     description: Local OpenAI- and Anthropic-compatible rotation proxy
@@ -130,22 +134,11 @@ homebrew_casks:
         xattr -d com.apple.quarantine "$(brew --prefix)/bin/chicco"
 
 release:
+  # release-please already created the release for this tag; this run only
+  # builds, attaches and publishes the cask. Leaving the pipe on would have
+  # goreleaser try to create it a second time.
+  disable: true
   github:
     owner: fabiocicerchia
     name: chicco
-  # Created unpublished so the workflow can attach assets to it: immutable
-  # releases reject uploads once a release is published. The workflow flips it
-  # to published as its last step.
-  draft: true
   prerelease: auto
-  footer: |
-    ## Verify the download
-
-    ```sh
-    cosign verify-blob \
-      --bundle checksums.txt.bundle \
-      --certificate-identity-regexp 'https://github.com/fabiocicerchia/chicco' \
-      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-      checksums.txt
-    sha256sum --ignore-missing -c checksums.txt
-    ```

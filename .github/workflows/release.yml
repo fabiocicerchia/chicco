@@ -1,61 +1,150 @@
 name: release
 
+# release-please reads Conventional Commit messages on main and keeps an open
+# "release PR" with the next version bump + CHANGELOG. Merging that PR cuts a
+# *draft* GitHub Release for vX.Y.Z; `artifacts` then attaches the binaries, the
+# OS packages, an SBOM and a signed provenance attestation, publishes the draft
+# last, and pushes the Homebrew cask.
+#
+# Why this is two release-please jobs and not one — do not collapse them back:
+# a draft release has no git tag, publishing it is what creates the tag. A
+# single invocation cuts the release and then computes the next release PR in
+# the same run, while the release is still a draft — so there is no tag for the
+# version already in .release-please-manifest.json, release-please loses its
+# anchor, walks the entire history and opens a PR re-releasing everything.
+# Merging that cuts another release, which opens another PR, forever. So:
+#
+#   release-please  phase 1 — cut the draft release only
+#   artifacts       attach assets, publish the draft -> tag exists
+#   docker          build, push and sign the image for that version
+#   release-pr      phase 2 — open/update the next release PR only
+#
+# This replaced a tag-triggered workflow, and had to: release-please creates the
+# tag with GITHUB_TOKEN, and GitHub does not start workflows from GITHUB_TOKEN
+# events — so `on: push: tags` would never fire for a release-please tag.
+
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 # Read-only by default; each job elevates only the scopes it needs.
 permissions:
   contents: read
 
 jobs:
-  goreleaser:
+  release-please:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # create the GitHub Release and upload assets
-      id-token: write   # OIDC token for keyless cosign signing
+      contents: write # create tags & releases
+      pull-requests: write # open/update the release PR
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
+        id: release
         with:
+          # "simple" is language-agnostic (tracks version.txt + CHANGELOG).
+          # Manifest mode: release-please-config.json sets `draft: true` so the
+          # GitHub Release is created unpublished. Immutable releases reject
+          # asset uploads once a release is published, so assets must land while
+          # it is still a draft; a later step flips it to published.
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+
+  # Binaries, the deb/rpm/apk/Arch packages, one SBOM per archive, a cosign
+  # signature over the checksums and the Homebrew cask — all from
+  # .goreleaser.yaml, so `goreleaser release --snapshot` on a laptop produces
+  # the same set.
+  artifacts:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload assets to the release
+      id-token: write # keyless signing via Sigstore
+      attestations: write # record the provenance attestation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The release is still a draft here, so its tag ref does not exist
+          # yet. This push *is* the release commit, so check that out instead.
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version: stable
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
       - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
-      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
+
+      # publish is NOT skipped: the Homebrew cask is published by that pipe, and
+      # skipping it builds the cask into dist/ and pushes it nowhere. The
+      # release pipe is disabled in .goreleaser.yaml instead, so this cannot
+      # create the release release-please already made. `--skip=validate`
+      # because the tag does not exist until the draft is published, and
+      # GORELEASER_CURRENT_TAG supplies the version in the meantime.
+      - name: build
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
         with:
           version: v2.16.0
-          args: release --clean
+          args: release --clean --skip=announce,validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Empty when the secret is not set, which makes the cask's
           # skip_upload true rather than failing the release.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ needs.release-please.outputs.tag }}
 
-      # goreleaser cuts the release as a draft (`release.draft` in
-      # .goreleaser.yaml) so that it can attach the archives, the OS packages,
-      # the SBOMs and the signatures to it. Immutable releases freeze a
-      # release's assets the moment it is published, so publishing comes last —
-      # if any of the above failed, the release stays a draft, which is
-      # recoverable, rather than published and missing an asset, which is not.
-      - name: Publish the draft release
+      # Keyless Sigstore signing — no long-lived key to store or rotate. Verify
+      # with: gh attestation verify <file> --repo <owner>/<repo>
+      - name: sign
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/*.pkg.tar.zst
+
+      # Only the artifacts: dist/ also holds goreleaser's own metadata.json,
+      # config.yaml and one directory per build target, none of which belong on
+      # a release.
+      - name: upload
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          # Through the environment, not interpolated into the script: `github`
-          # context data is untrusted input as far as a `run:` step is concerned.
-          TAG: ${{ github.ref_name }}
-        run: gh release edit "$TAG" --draft=false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: |
+          find dist -maxdepth 1 -type f \
+            \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \
+               -o -name '*.apk' -o -name '*.pkg.tar.zst' \
+               -o -name 'checksums.txt*' -o -name '*.sbom.json' \) \
+            -print0 | xargs -0 gh release upload "$TAG" --repo "$GITHUB_REPOSITORY"
+
+      - name: Publish the draft release
+        # Assets can only be attached while the release is a draft;
+        # publishing last is what leaves it immutable with assets intact.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
 
   docker:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write   # push the image to ghcr.io
       id-token: write   # OIDC token for keyless cosign signing
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      # The release commit, for the same reason as `artifacts`: the tag ref does
+      # not exist while the release is still a draft.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8  # v4.2.0
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4.3.0
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
@@ -73,14 +162,45 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: VERSION=${{ needs.release-please.outputs.tag }}
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:${{ needs.release-please.outputs.tag }}
             ghcr.io/${{ github.repository }}:latest
-            docker.io/${{ github.repository }}:${{ github.ref_name }}
+            docker.io/${{ github.repository }}:${{ needs.release-please.outputs.tag }}
             docker.io/${{ github.repository }}:latest
-      # Keyless-signs the pushed image by digest, same posture as the
-      # checksums.txt signing above — verify with the snippet in docs/DOCKER.md.
-      - run: |
-          cosign sign --yes "ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
-          cosign sign --yes "docker.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
+
+      # Keyless-signs the pushed image by digest, same posture as the checksums
+      # signing above — verify with the snippet in docs/DOCKER.md. By digest,
+      # never by tag: a tag is mutable, so a signature attached to one says
+      # nothing about the bytes a later puller receives.
+      - name: Sign the pushed digest
+        env:
+          REPO: ${{ github.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "ghcr.io/${REPO}@${DIGEST}"
+          cosign sign --yes "docker.io/${REPO}@${DIGEST}"
+
+  # Phase 2 — open/update the next release PR, now that `artifacts` has
+  # published the draft and the tag exists. `always()` because on an ordinary
+  # push no release was cut and `artifacts` is skipped, yet the release PR still
+  # has to be kept up to date; when a release *was* cut, `artifacts` must have
+  # succeeded, or there is no tag to anchor on and this would re-release the
+  # whole history.
+  release-pr:
+    needs: [release-please, artifacts]
+    if: always()
+      && needs.release-please.result == 'success'
+      && (needs.release-please.outputs.released != 'true'
+      || needs.artifacts.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write # open/update the release PR
+    steps:
+      # Same configuration as phase 1 — the two invocations must agree.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true
