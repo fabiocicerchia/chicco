@@ -33,6 +33,40 @@ archives:
       - LICENSE
       - CHANGELOG.md
       - chicco.yaml
+      - src: man/*.1
+        dst: man
+
+# The OS packages. One binary, one man page, the licence and the readme — laid
+# out where a packager expects them rather than in a tarball to unpack. Only the
+# linux builds are packaged; nfpm has nothing to say about darwin or windows.
+nfpms:
+  - id: chicco
+    package_name: chicco
+    vendor: Fabio Cicerchia
+    homepage: https://github.com/fabiocicerchia/chicco
+    maintainer: Fabio Cicerchia <info@fabiocicerchia.it>
+    description: Local OpenAI- and Anthropic-compatible rotation proxy
+    license: MIT
+    formats: [deb, rpm, apk, archlinux]
+    bindir: /usr/bin
+    section: utils
+    contents:
+      - src: man/chicco.1
+        dst: /usr/share/man/man1/chicco.1
+        file_info:
+          mode: 0644
+      - src: LICENSE
+        dst: /usr/share/doc/chicco/LICENSE
+        file_info:
+          mode: 0644
+      - src: README.md
+        dst: /usr/share/doc/chicco/README.md
+        file_info:
+          mode: 0644
+      - src: chicco.yaml
+        dst: /usr/share/doc/chicco/chicco.yaml.example
+        file_info:
+          mode: 0644
 
 checksum:
   name_template: "checksums.txt"
@@ -65,10 +99,43 @@ changelog:
       - "^chore:"
       - "^ci:"
 
+# The Homebrew cask, published to fabiocicerchia/homebrew-tap on release:
+#
+#   brew install fabiocicerchia/tap/chicco
+#
+# A cask, not a formula: homebrew-core requires formulae to build from source,
+# and these are prebuilt binaries. Casks are macOS-only — Linux users install
+# the deb/rpm/apk above.
+homebrew_casks:
+  - name: chicco
+    binaries: [chicco]
+    manpages: [man/chicco.1]
+    homepage: https://github.com/fabiocicerchia/chicco
+    description: Local OpenAI- and Anthropic-compatible rotation proxy
+    repository:
+      owner: fabiocicerchia
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # Build the cask always, push it only when the tap token is present, so a
+    # release does not fail on a secret that has not been added yet.
+    skip_upload: '{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}'
+    # This binary is not notarized, so Gatekeeper quarantines it on download.
+    # GoReleaser documents stripping the quarantine flag in a post-install hook;
+    # that is a deliberate bypass of a macOS security control, so it is not done
+    # here — the user is told instead. Notarizing (an Apple Developer account)
+    # is the fix that removes this note.
+    caveats: |
+      macOS quarantines binaries it cannot verify. On first run:
+        xattr -d com.apple.quarantine "$(brew --prefix)/bin/chicco"
+
 release:
   github:
     owner: fabiocicerchia
     name: chicco
+  # Created unpublished so the workflow can attach assets to it: immutable
+  # releases reject uploads once a release is published. The workflow flips it
+  # to published as its last step.
+  draft: true
   prerelease: auto
   footer: |
     ## Verify the download

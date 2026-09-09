@@ -89,6 +89,21 @@ More in [`docs/architecture.md`](docs/architecture.md).
 
 ## Install
 
+macOS, via Homebrew:
+
+```sh
+brew install fabiocicerchia/tap/chicco
+```
+
+Linux — a `.deb`, `.rpm`, `.apk` or Arch package from the
+[latest release](https://github.com/fabiocicerchia/chicco/releases/latest):
+
+```sh
+sudo dpkg -i chicco_*_linux_amd64.deb     # or rpm -i / apk add --allow-untrusted
+```
+
+Or with Go:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/fabiocicerchia/chicco/main/install.sh | sh
 ```
