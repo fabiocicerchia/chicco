@@ -99,6 +99,35 @@ changelog:
       - "^chore:"
       - "^ci:"
 
+# The Homebrew cask, published to fabiocicerchia/homebrew-tap on release:
+#
+#   brew install fabiocicerchia/tap/chicco
+#
+# A cask, not a formula: homebrew-core requires formulae to build from source,
+# and these are prebuilt binaries. Casks are macOS-only — Linux users install
+# the deb/rpm/apk above.
+homebrew_casks:
+  - name: chicco
+    binaries: [chicco]
+    manpages: [man/chicco.1]
+    homepage: https://github.com/fabiocicerchia/chicco
+    description: Local OpenAI- and Anthropic-compatible rotation proxy
+    repository:
+      owner: fabiocicerchia
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # Build the cask always, push it only when the tap token is present, so a
+    # release does not fail on a secret that has not been added yet.
+    skip_upload: '{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}'
+    # This binary is not notarized, so Gatekeeper quarantines it on download.
+    # GoReleaser documents stripping the quarantine flag in a post-install hook;
+    # that is a deliberate bypass of a macOS security control, so it is not done
+    # here — the user is told instead. Notarizing (an Apple Developer account)
+    # is the fix that removes this note.
+    caveats: |
+      macOS quarantines binaries it cannot verify. On first run:
+        xattr -d com.apple.quarantine "$(brew --prefix)/bin/chicco"
+
 release:
   github:
     owner: fabiocicerchia

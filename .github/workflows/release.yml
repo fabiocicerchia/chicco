@@ -29,6 +29,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Empty when the secret is not set, which makes the cask's
+          # skip_upload true rather than failing the release.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       # goreleaser cuts the release as a draft (`release.draft` in
       # .goreleaser.yaml) so that it can attach the archives, the OS packages,
