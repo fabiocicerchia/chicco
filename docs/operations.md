@@ -55,6 +55,7 @@ Flags:
 | `-state`     | `chicco-state.json`  | token-usage state file (empty disables it)       |
 | `-headless`  | `false`              | disable the dashboard; log plainly to stderr     |
 | `-check`     | `false`              | validate the config and exit (no server)         |
+| `-strict`    | `false`              | with `-check`: warnings fail the check too       |
 | `-version`   | —                    | print version and exit                           |
 
 `chicco -check -config chicco.yaml` statically validates the config — bad YAML,
@@ -62,6 +63,11 @@ a `kind: cli` provider missing `command`, an `http` provider missing `base_url`,
 unknown `kind`/`output`/model `strategy` values, duplicate names — and exits
 non-zero on any hard error (warnings for inactive providers don't fail it). It
 binds no port, so it's safe in CI or a pre-commit hook.
+
+`chicco -check -strict` fails on those warnings as well. Use it where the
+config is the deployment's intent rather than a developer's convenience: an
+unexported `${GROQ_API_KEY}` silently halves the pool, chicco starts anyway,
+and the missing capacity surfaces later as cooldowns nobody can explain.
 
 `chicco -help` prints full usage.
 
