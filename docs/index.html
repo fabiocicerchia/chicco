@@ -42,7 +42,11 @@ footer{margin-top:2.2rem;color:#5c6684;font-size:.82rem}
 <div class="card">
   <h1>🔀 chicco</h1>
   <p class="tagline">A local, OpenAI- and Anthropic-compatible rotation proxy.</p>
-  <p class="desc">A tiny local, OpenAI- and Anthropic-compatible rotation proxy. chicco fronts a pool of providers behind one stable endpoint: it forwards each request — OpenAI chat completions (/v1/chat/completions), Anthropic messages (/v1/messages), or embeddings (/v1/embeddings) — to the next provider in…</p>
+  <p class="desc">
+    A tiny local, OpenAI- and Anthropic-compatible rotation proxy. chicco fronts a pool of providers behind one stable
+    endpoint: it forwards each request — OpenAI chat completions (/v1/chat/completions), Anthropic messages
+    (/v1/messages), or embeddings (/v1/embeddings) — to the next provider in…
+  </p>
   <div class="install-label">Install</div>
   <pre><code>curl -fsSL https://raw.githubusercontent.com/fabiocicerchia/chicco/main/install.sh | sh</code></pre>
   <p class="alt">or: <code>go install github.com/fabiocicerchia/chicco@latest</code></p>
