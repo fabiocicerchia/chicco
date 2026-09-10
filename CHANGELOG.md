@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1](https://github.com/fabiocicerchia/chicco/compare/v0.1.0...v0.1.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **coc:** restore the reporting address and the version deep-link ([#75](https://github.com/fabiocicerchia/chicco/issues/75)) ([6f7c15d](https://github.com/fabiocicerchia/chicco/commit/6f7c15d8c969425579ab2e808d23e8eae5b96596))
+
 ## [Unreleased]
 
 ### Added
