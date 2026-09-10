@@ -28,9 +28,11 @@ Examples of unacceptable behaviour:
 ## Enforcement
 
 Instances of abusive, harassing or otherwise unacceptable behaviour may be
-reported to the maintainer listed on the
-[fabiocicerchia](https://github.com/fabiocicerchia) profile. All complaints will be
-reviewed and investigated promptly and fairly.
+reported to **<info@fabiocicerchia.it>**. All complaints will be reviewed and
+investigated promptly and fairly, and reports are handled confidentially.
 
-This Code of Conduct is adapted from the
-[Contributor Covenant](https://www.contributor-covenant.org), version 2.1.
+This Code of Conduct is adapted from the [Contributor Covenant][covenant],
+version 2.1. This page is an abridged summary — the full text, including the
+enforcement guidelines, is at the link above.
+
+[covenant]: https://www.contributor-covenant.org/version/2/1/code_of_conduct/
