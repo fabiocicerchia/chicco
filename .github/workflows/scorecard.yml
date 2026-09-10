@@ -1,25 +1,32 @@
+# Managed centrally — edit the shared config, not this copy.
+#
+# One `common` overlay covers public and private repos alike; the job below
+# guards itself instead of the overlay tree branching. OpenSSF Scorecard only
+# has anything to say about public repos, so on a private one this no-ops.
 name: scorecard
 
 on:
   branch_protection_rule:
   schedule:
-    - cron: '20 7 * * 1'   # weekly, Monday 07:20 UTC
+    - cron: "41 5 * * 2"
   push:
-    branches: [main]
+    branches: [main, master]
+  workflow_dispatch:
 
-# Read-only by default; the analysis job elevates only what it needs.
 permissions: read-all
 
 jobs:
   analysis:
-    name: Scorecard analysis
+    # GitHub Advanced Security is required for this on private repos; skip instead of failing red.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     permissions:
-      security-events: write   # upload SARIF to the code-scanning dashboard
-      id-token: write          # OIDC token to publish results to the OpenSSF API
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
@@ -28,14 +35,7 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: true   # feed the public OpenSSF Scorecard badge/API
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: SARIF file
-          path: results.sarif
-          retention-days: 5
+          publish_results: true
 
       - name: Upload to code-scanning
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
