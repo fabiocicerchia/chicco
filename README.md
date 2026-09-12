@@ -48,6 +48,30 @@ so you see their real state) and folds the results back into the table; runs in 
 background so the dashboard stays live. Run with `-headless` (or pipe stdout) to
 disable the dashboard and log plainly to stderr instead.
 
+## Features
+
+- One stable local endpoint in front of a pool of providers — OpenAI chat
+  completions (`/v1/chat/completions`), Anthropic messages (`/v1/messages`)
+  and embeddings (`/v1/embeddings`).
+- Drains providers **in the order you list them**, skipping any that hits a
+  quota, rate-limit or auth error, so a single URL cascades across several
+  free tiers.
+- Providers can be HTTP APIs **or local CLI tools** (claude, codex, gemini,
+  qwen, …). Embeddings rotate across HTTP providers only — CLI backends
+  return text, not vectors.
+- Translates between the two SDK shapes, streaming included: Anthropic
+  requests into OpenAI form, OpenAI SSE back into Anthropic SSE.
+- Live **Bubble Tea dashboard** — per-provider usage bars, state dots and a
+  rolling log pane; `t` probes every configured model and folds the results
+  back in; `-headless` logs to stderr instead.
+- Token usage is **persisted to disk**, so counters survive restarts and
+  reboots.
+- **Loopback by default**: it refuses any other bind address unless you set an
+  `api_key`, because it holds a live key for every provider you configure.
+- Honest about what it is not — a rotator, not a gateway: no latency or cost
+  balancing, and quota accounting is client-side bookkeeping against the
+  limits *you* declare, not a reading of the provider's counter.
+
 ## How it works
 
 One process, one endpoint, and a list you control:
