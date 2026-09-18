@@ -9,8 +9,8 @@ on:
   branch_protection_rule:
   schedule:
     - cron: "41 5 * * 2"
-  push:
-    branches: [main, master]
+  # No push trigger: the pull request already ran this on the identical
+  # tree. What a merge cannot tell you, the schedule below can.
   workflow_dispatch:
 
 permissions: read-all
