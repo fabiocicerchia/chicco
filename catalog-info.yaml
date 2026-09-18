@@ -1,0 +1,22 @@
+# Backstage catalog entry, read by paved's scorecard plugin.
+#
+# Every check paved scores is derived from this file alone — no cluster
+# access, no CI credentials. What is absent here is absent from the score.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: chicco
+  description: >-
+      OpenAI- and Anthropic-compatible proxy with automatic provider rotation, failover, and quota
+      tracking.
+  annotations:
+    github.com/project-slug: fabiocicerchia/chicco
+    backstage.io/source-location: url:https://github.com/fabiocicerchia/chicco/
+  links:
+    - url: https://github.com/fabiocicerchia/chicco
+      title: Source
+spec:
+  type: library
+  lifecycle: production
+  owner: group:default/kodebeat
+  system: oss-tools
