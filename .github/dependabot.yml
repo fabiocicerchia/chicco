@@ -8,6 +8,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # Everything else rides in one pull request rather than one each.
+      actions:
+        patterns: ["*"]
   - package-ecosystem: docker
     directory: /
     schedule:
