@@ -26,6 +26,7 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     # read the code, post the review, and upload code-scanning results.
     permissions:
+      actions: read # private repo: upload-sarif reads this run's metadata
       contents: read
       packages: read # pull the ghcr scanner image
       pull-requests: write
