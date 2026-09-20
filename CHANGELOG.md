@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2](https://github.com/fabiocicerchia/chicco/compare/v0.1.1...v0.1.2) (2026-09-20)
+
+
+### Bug Fixes
+
+* **ci:** keep actions: read on the job that uploads sarif ([#88](https://github.com/fabiocicerchia/chicco/issues/88)) ([0314464](https://github.com/fabiocicerchia/chicco/commit/0314464a96948f5c3e42d58d1adbc177a5b9f868))
+
 ## [0.1.1](https://github.com/fabiocicerchia/chicco/compare/v0.1.0...v0.1.1) (2026-09-10)
 
 
