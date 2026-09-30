@@ -5,7 +5,7 @@
 # equivalent). --platform=$BUILDPLATFORM + GOOS/GOARCH cross-compiles Go
 # natively on the runner's own arch for a multi-platform buildx build, instead
 # of emulating the whole compile under QEMU for the non-native target.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
