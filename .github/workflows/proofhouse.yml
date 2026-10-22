@@ -43,7 +43,7 @@ jobs:
         with:
           persist-credentials: false
           repository: fabiocicerchia/gandalf
-          ref: v0.14.0
+          ref: a0bb90747ab85aa9e66ed554109991db2951ff86 # v0.14.0
           path: .gandalf-src
 
       # Out of the workspace before the scan starts: left where checkout put it,
@@ -59,7 +59,7 @@ jobs:
           docker run --rm \
             --user "$(id -u):$(id -g)" -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1 \
             -v "${GITHUB_WORKSPACE}:/src" -v "${RUNNER_TEMP}/gandalf:/gandalf:ro" -w /src \
-            ghcr.io/fabiocicerchia/gandalf-tools:latest \
+            ghcr.io/fabiocicerchia/gandalf-tools:0.14.0@sha256:9718f0093ac401082bbe2bd2a4f7241e317e56a759525d6951d646bf644e60e3 \
             sh -c 'git config --global --add safe.directory "*" \
               && PYTHONPATH=/gandalf/src python -m gandalf --no-llm --no-html --out-dir reports'
 
