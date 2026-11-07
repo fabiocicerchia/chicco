@@ -1,0 +1,3971 @@
+{
+ "excluded": {
+  "chart/check": [
+   {
+    "candidate": "The chart check lints the Helm chart and fails on any lint error",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "chart/check.sh"
+   },
+   {
+    "candidate": "The chart check renders the chart with default values and fails unless the output contains an image: line",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "chart/check.sh"
+   },
+   {
+    "candidate": "The chart check runs helm inside the pinned alpine/helm:3.16.2 container, so the host needs no local helm install",
+    "covered_by": "",
+    "reason": "TECH_DEVTOOLING",
+    "source": "chart/check.sh"
+   },
+   {
+    "candidate": "The chart check prints OK when lint and render both pass",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "chart/check.sh"
+   }
+  ],
+  "chicco/dockerfile": [
+   {
+    "candidate": "Build stage compiles a static binary with CGO disabled and stripped symbols",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Dockerfile#build"
+   },
+   {
+    "candidate": "VERSION build arg stamps the version shown by chicco -version",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Dockerfile#build"
+   },
+   {
+    "candidate": "Multi-platform cross-compilation via BUILDPLATFORM/TARGETOS/TARGETARCH",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Dockerfile#build"
+   },
+   {
+    "candidate": "Base images pinned by sha256 digest",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Dockerfile#FROM"
+   },
+   {
+    "candidate": "ca-certificates installed so HTTPS provider calls work",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Dockerfile#RUN"
+   },
+   {
+    "candidate": "Port 41986 declared as exposed",
+    "covered_by": "operations.container.health-from-health-endpoint",
+    "reason": "DUPLICATE_OF",
+    "source": "Dockerfile#EXPOSE"
+   },
+   {
+    "candidate": "/health is reachable without the proxy API key",
+    "covered_by": "api-gateway/access-control (owned by the proxy auth module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/auth.go#withAuth"
+   }
+  ],
+  "chicco/install": [
+   {
+    "candidate": "Temporary download directory is removed on exit",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "install.sh#tmp"
+   },
+   {
+    "candidate": "Fallback from install(1) to mv plus chmod",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "install.sh#bindir"
+   },
+   {
+    "candidate": "Download or checksums.txt fetch failure messages",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "install.sh#dlo"
+   },
+   {
+    "candidate": "Archive extraction failure message",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "install.sh#archive"
+   },
+   {
+    "candidate": "curl preferred over wget",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "install.sh#dl"
+   }
+  ],
+  "chicco/makefile": [
+   {
+    "candidate": "`make` with no target prints the grouped help listing built from the ## comments (Makefile#help)",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#help"
+   },
+   {
+    "candidate": "`make build` compiles bin/chicco with the version taken from git describe (or 'dev') stamped into main.version",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#build"
+   },
+   {
+    "candidate": "`make install` without PREFIX does a go install and copies the man page into USER_MANDIR; with PREFIX it installs into $(DESTDIR)$(PREFIX)/bin and share/man/man1. Note: USER_MANDIR is never defined anywhere in the repo, so the no-PREFIX path runs `install -d \"\"` and fails. Also, install and uninstall have no ## help comment in the `target: ## text` form, so `make help` doesn't list them",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#install"
+   },
+   {
+    "candidate": "`make uninstall` removes the binary and man page that `make install` put down (same undefined USER_MANDIR in the no-PREFIX path)",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#uninstall"
+   },
+   {
+    "candidate": "`make run` runs chicco through go run, passing ARGS through",
+    "covered_by": "",
+    "reason": "TECH_DEVTOOLING",
+    "source": "Makefile#run"
+   },
+   {
+    "candidate": "`make clean` deletes bin and dist",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#clean"
+   },
+   {
+    "candidate": "`make lint` runs every pre-commit hook on all files; `make analyze` runs golangci-lint; `make format` runs gofmt -w",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#lint"
+   },
+   {
+    "candidate": "`make test` always runs the tests with the race detector",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#test"
+   },
+   {
+    "candidate": "`make setup` installs the pre-commit hook",
+    "covered_by": "",
+    "reason": "TECH_DEVTOOLING",
+    "source": "Makefile#setup"
+   },
+   {
+    "candidate": "`make docker-build` builds the chicco image with VERSION as a build argument (the help text says chicco:latest; the tag is chicco, which Docker resolves to chicco:latest)",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#docker-build"
+   },
+   {
+    "candidate": "`make snapshot` builds a local, unpublished GoReleaser release",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "Makefile#snapshot"
+   }
+  ],
+  "cmd/chicco": [
+   {
+    "candidate": "-addr overrides the listen address set in chicco.yaml",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "cmd/chicco/main.go#main"
+   },
+   {
+    "candidate": "-state sets the token-usage state file, and an empty value disables persistence",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "cmd/chicco/main.go#main"
+   },
+   {
+    "candidate": "-headless disables the dashboard and logs to stderr",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "cmd/chicco/main.go#main"
+   },
+   {
+    "candidate": "-version takes precedence over -check when both are given",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "cmd/chicco/main.go#main"
+   },
+   {
+    "candidate": "Version stamped via -ldflags -X main.version",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "cmd/chicco/main.go#version"
+   }
+  ],
+  "proxy/alert": [
+   {
+    "candidate": "Fired-alert memory is kept across a config reload so SIGHUP does not re-announce",
+    "covered_by": "usage.quota-alerts.once-per-window",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "Webhook POST bounded by webhook_timeout with a 5s default",
+    "covered_by": "usage.quota-alerts.webhook-failure-never-fails-request",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/alert.go#newAlerter"
+   },
+   {
+    "candidate": "Budget check collects alerts under the lock and fires them after releasing it",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/alert.go#Rotator.checkBudgets"
+   },
+   {
+    "candidate": "Alert log line still emitted when no webhook is configured",
+    "covered_by": "usage.quota-alerts.disabled-when-unconfigured",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/alert.go#alerter.fire"
+   },
+   {
+    "candidate": "alerts block parsing from chicco.yaml (threshold_percent, webhook, webhook_timeout)",
+    "covered_by": "usage.quota-alerts.disabled-when-unconfigured",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/alert.go#AlertConfig"
+   },
+   {
+    "candidate": "Percent is truncated toward zero (799/1000 reports 79%)",
+    "covered_by": "usage.quota-alerts.warn-on-threshold-crossing",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/alert.go#alerter.check"
+   },
+   {
+    "candidate": "A provider reaching the alert threshold produces a warning",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/alert.go#alerter.check"
+   },
+   {
+    "candidate": "A provider over its threshold is warned about once per quota window, not once per request",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/alert.go#alerter.check"
+   },
+   {
+    "candidate": "Each provider's quota warning is independent of every other provider's",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/alert.go#alerter.check"
+   },
+   {
+    "candidate": "A failing quota webhook never fails the caller's request",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/alert.go#alerter.fire"
+   },
+   {
+    "candidate": "No quota warnings are raised when alerting is off or a provider has no quota",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/alert.go#alerter.enabled"
+   }
+  ],
+  "proxy/anthropic": [
+   {
+    "candidate": "Upstream is always asked for stream:true with include_usage regardless of caller choice",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "Body read failure answered 400 invalid_request_error 'chicco: read body'",
+    "covered_by": "api-gateway.anthropic-messages.malformed-request-refused",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "Served-tokens log line with cost note",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "Tool calls translated to tool_use blocks with stop_reason tool_use",
+    "covered_by": "enforced in anthropic_stream.go / anthropic_json.go, outside this module",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_test.go#TestMessagesToolUse"
+   },
+   {
+    "candidate": "Anthropic request fields (system, tool_result) translated into OpenAI messages",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_request.go#anthropicToOpenAI"
+   },
+   {
+    "candidate": "A caller gets a single message or an event stream depending on the stream flag",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "A malformed Anthropic request is refused before any provider is tried",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "Only POST is accepted on the messages endpoint",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "When no provider can serve, the caller gets an Anthropic overloaded error with a retry hint",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "Messages requests fail over and share cooldowns with chat completions",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "Spend for a messages request counts every token at the output price",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   }
+  ],
+  "proxy/anthropic-json": [
+   {
+    "candidate": "The upstream is always requested as a stream and buffered for non-stream callers",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic.go#Rotator.handleMessages"
+   },
+   {
+    "candidate": "Token total returned for chicco's own usage accounting and cost logging",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_json.go#respondAnthropicJSON"
+   },
+   {
+    "candidate": "A single non-SSE OpenAI JSON body (choices[].message) is also translated",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_stream.go#streamState.applyChoices"
+   },
+   {
+    "candidate": "Text deltas arriving before a text block opens are dropped",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_json.go#jsonSink.textDelta"
+   },
+   {
+    "candidate": "Interleaved parallel tool calls are not tracked per index",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_stream.go#translateOpenAIStream"
+   },
+   {
+    "candidate": "A provider's tool call is returned as a tool_use block with its arguments parsed",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_json.go#jsonSink.closeBlock"
+   },
+   {
+    "candidate": "Text and tool calls come back as separate content blocks in the order the provider produced them",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_stream.go#streamState.toolDelta"
+   },
+   {
+    "candidate": "A tool call with missing or malformed arguments is returned with an empty input",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_json.go#jsonSink.closeBlock"
+   },
+   {
+    "candidate": "The reply reports the provider's input and output token counts",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_stream.go#streamState.finish"
+   }
+  ],
+  "proxy/anthropic-request": [
+   {
+    "candidate": "Messages are built as []any so the CLI splitMessages type assertion succeeds",
+    "covered_by": "anthropic-messages.request.conversation-reaches-provider",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_request.go#anthropicMessages"
+   },
+   {
+    "candidate": "Tools are built as []any so dispatch can warn that CLI providers ignore function calling",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_request.go#anthropicTools"
+   },
+   {
+    "candidate": "Requested model and stream flag are returned to the handler",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_request.go#anthropicToOpenAI"
+   },
+   {
+    "candidate": "Multiple text blocks in a user turn, system, or tool result are joined with blank lines; assistant text blocks are concatenated with no separator",
+    "covered_by": "anthropic-messages.request.conversation-reaches-provider",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/anthropic_request.go#anthropicBlockText"
+   },
+   {
+    "candidate": "Unparseable tool_choice falls back to auto",
+    "covered_by": "anthropic-messages.request.tool-choice-mapped",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/anthropic_request.go#anthropicToolChoice"
+   },
+   {
+    "candidate": "A tool_result whose content is a block list keeps only its text blocks",
+    "covered_by": "anthropic-messages.request.tool-turns-preserved",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/anthropic_request.go#anthropicBlockText"
+   },
+   {
+    "candidate": "Upstream is always asked for a stream with usage regardless of caller's stream flag",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic.go#handleMessages"
+   }
+  ],
+  "proxy/anthropic-sse": [
+   {
+    "candidate": "Mapping OpenAI finish reasons to Anthropic stop reasons (length\u2192max_tokens, tool_calls\u2192tool_use, content_filter\u2192stop_sequence)",
+    "covered_by": "proxy/anthropic-stream module (translator, not this sink)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/anthropic_stream.go#mapStopReason"
+   },
+   {
+    "candidate": "Write errors to a departed client are ignored mid-stream",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_sse.go#writeSSEEvent"
+   },
+   {
+    "candidate": "Failover and error status must be settled before the stream starts",
+    "covered_by": "routing/failover (dispatch module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/anthropic.go#handleMessages"
+   },
+   {
+    "candidate": "Total token count returned for chicco's own usage accounting",
+    "covered_by": "usage-and-cost/token-usage",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/anthropic_sse.go#respondAnthropicStream"
+   },
+   {
+    "candidate": "Upstream body closed after relaying",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_sse.go#respondAnthropicStream"
+   },
+   {
+    "candidate": "Only one content block open at a time",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_sse.go#sseSink"
+   }
+  ],
+  "proxy/anthropic-stream": [
+   {
+    "candidate": "Blank lines, the [DONE] sentinel and lines that are not valid JSON objects are skipped silently",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_stream.go#parseChunk"
+   },
+   {
+    "candidate": "A single non-streamed OpenAI JSON body (choices[].message) is translated too",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_stream.go#streamState.applyChoices"
+   },
+   {
+    "candidate": "Returns the total token count for chicco's own usage accounting",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_stream.go#translateOpenAIStream"
+   },
+   {
+    "candidate": "One translator drives both a live SSE sink and a buffering JSON sink",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_stream.go#anthropicSink"
+   },
+   {
+    "candidate": "1 MiB read buffer for upstream lines",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/anthropic_stream.go#translateOpenAIStream"
+   },
+   {
+    "candidate": "Each tool call the provider makes becomes its own Anthropic tool_use block",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_stream.go#streamState.toolDelta"
+   },
+   {
+    "candidate": "The provider's token counts are reported as Anthropic usage",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_stream.go#streamState.finish"
+   },
+   {
+    "candidate": "A provider reply with no content still ends the Anthropic message",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/anthropic_stream.go#streamState.finish"
+   }
+  ],
+  "proxy/auth": [
+   {
+    "candidate": "Constant-time comparison of the presented key",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/auth.go#secretMatches"
+   },
+   {
+    "candidate": "Key read under the rotator mutex to avoid racing a reload",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/auth.go#currentAuthKey"
+   },
+   {
+    "candidate": "Whitespace around the bearer token is trimmed",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/auth.go#bearerMatches"
+   }
+  ],
+  "proxy/classify": [
+   {
+    "candidate": "Body text only ever softens the verdict the status implies",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/classify.go#classifyUpstream"
+   },
+   {
+    "candidate": "Quota wording is checked before model wording so quota replies that mention the model stay provider-wide",
+    "covered_by": "routing.error-classification.exhausted-quota-is-a-limit-not-a-bad-key",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/classify.go#classifyUpstream"
+   },
+   {
+    "candidate": "Model ids containing dots are still recognised in model-rejection wording",
+    "covered_by": "routing.error-classification.model-rejection-benches-only-that-model",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/classify.go#modelBodyRe"
+   },
+   {
+    "candidate": "parseRetryAfter rejects zero, negative and whitespace-padded values",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/classify.go#parseRetryAfter"
+   },
+   {
+    "candidate": "Cooldown durations as named constants",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/classify.go"
+   },
+   {
+    "candidate": "blockReason/isAuth reused by the dashboard model test and health probes",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/classify.go#blockReason"
+   }
+  ],
+  "proxy/cli": [
+   {
+    "candidate": "strip_ansi removes colour escapes from the tool's output",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/cli.go#runCLI"
+   },
+   {
+    "candidate": "Output temp file is created, closed and removed after the run",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cli.go#runCLI"
+   },
+   {
+    "candidate": "Coercion of JSON numbers/strings in asString and asInt64",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cli.go#asString"
+   },
+   {
+    "candidate": "Dotted-path walking into JSON",
+    "covered_by": "cli.replies.answer-from-json-path",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cli.go#dotGet"
+   },
+   {
+    "candidate": "Requests with tools or embeddings are routed past CLI providers (503 when only CLI providers remain)",
+    "covered_by": "enforced in dispatch.go, not in this module",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go"
+   },
+   {
+    "candidate": "Classifying CLI failure text as logged out (401), rate limited (429 with reset time) or transient (502)",
+    "covered_by": "enforced in clierrors.go, not in this module",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/clierrors.go#cliFailure"
+   },
+   {
+    "candidate": "SSE/JSON synthesis framing, ids and model on chunks",
+    "covered_by": "enforced in clisynth.go, not in this module",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/clisynth.go"
+   }
+  ],
+  "proxy/clierrors": [
+   {
+    "candidate": "ANSI colour codes are stripped from CLI output when strip_ansi is set",
+    "covered_by": "cli-providers/cli-response-synthesis (applied to successful output in runCLI, not here)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/cli.go#runCLI"
+   },
+   {
+    "candidate": "Failure status codes 401/429/502 used to signal the router",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/clierrors.go#cliFailure"
+   },
+   {
+    "candidate": "Reset keyword search order (reset, try again, again, available)",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/clierrors.go#parseResetDuration"
+   },
+   {
+    "candidate": "Out-of-range clock times (e.g. 25:00) give no reset time",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/clierrors.go#clockReset"
+   }
+  ],
+  "proxy/clisynth": [
+   {
+    "candidate": "Errors from json.Marshal are ignored because the maps are literals",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/clisynth.go#synthJSON"
+   },
+   {
+    "candidate": "Streamed usage chunk is left out when both token counts are zero",
+    "covered_by": "cli-providers.response-synthesis.usage-totals-prompt-plus-completion",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/clisynth.go#synthSSE"
+   },
+   {
+    "candidate": "The proxy's own usage parser reads the synthesized usage chunk back for the dashboard",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/clisynth.go#synthSSE"
+   },
+   {
+    "candidate": "The created timestamp comes from the injectable now() clock",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/clisynth.go#synthJSON"
+   }
+  ],
+  "proxy/clock": [
+   {
+    "candidate": "The package reads the current time through one replaceable clock variable (now = time.Now) so tests can move time instead of sleeping",
+    "covered_by": "",
+    "reason": "TECH_DEVTOOLING",
+    "source": "internal/proxy/clock.go#now"
+   },
+   {
+    "candidate": "Cooldowns, quota windows, daily counters and the dashboard all take the current time from the same clock",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/clock.go#now"
+   }
+  ],
+  "proxy/config": [
+   {
+    "candidate": "Validate() flags missing base_url, a CLI provider without a command, duplicate names, unknown kind, json output without result_path, inactive providers, unknown strategy and negative weight",
+    "covered_by": "Validate is not defined in config.go; it belongs to the configuration/config-validation module",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config_test.go#TestValidateCatchesMistakes"
+   },
+   {
+    "candidate": "Per-backend weight overrides the provider's weight for the weighted strategy",
+    "covered_by": "the observable effect is enforced by Rotator.order (routing/provider-rotation)",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/config.go#Backend.effectiveWeight"
+   },
+   {
+    "candidate": "${VAR} expansion of api_key, command, credential and args",
+    "covered_by": "done in configload.go#LoadConfig, owned by the config-loading module",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Provider"
+   },
+   {
+    "candidate": "A provider with no key or no models is inactive and skipped",
+    "covered_by": "only documented in a comment here; enforced by the rotator and validation",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Provider"
+   },
+   {
+    "candidate": "No pricing configured means requests are reported as unpriced rather than free",
+    "covered_by": "comment only; enforced in usage-and-cost/spend-tracking",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Config"
+   },
+   {
+    "candidate": "Aggregate quota caps all providers combined",
+    "covered_by": "field only; enforcement is in routing/cooldowns-quotas",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Config"
+   },
+   {
+    "candidate": "Aliases map caller-facing names onto virtual models",
+    "covered_by": "resolved in the rotator and validated by validateAliases",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Config"
+   },
+   {
+    "candidate": "CLI provider fields (command, args templating, output, result_path, timeout default 120)",
+    "covered_by": "behaviour lives in cli-providers/cli-execution",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Provider"
+   },
+   {
+    "candidate": "Strategy values order/round_robin/random/weighted",
+    "covered_by": "Rotator.order (routing/provider-rotation)",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Model"
+   },
+   {
+    "candidate": "Malformed mapping node with an odd number of children is rejected",
+    "covered_by": "a defensive guard that YAML parsing cannot produce",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/config.go#decodeProviderMap"
+   },
+   {
+    "candidate": "rawConfig intermediate decoding shape",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/config.go#rawConfig"
+   },
+   {
+    "candidate": "Metrics are off unless enabled, and default to their own loopback port",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Config.UnmarshalYAML"
+   },
+   {
+    "candidate": "A per-model quota replaces the provider's quota for that model",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Backend.effectiveQuota"
+   }
+  ],
+  "proxy/configload": [
+   {
+    "candidate": "Aliases pointing at unknown, empty or shadowing targets are refused at load",
+    "covered_by": "configuration.config-validation (enforced by internal/proxy/validate.go#validateAliases, owned by the validation module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/configload.go#LoadConfig"
+   },
+   {
+    "candidate": "Providers may be written as a list or as a keyed map",
+    "covered_by": "proxy/config module (decodeProviders lives in config.go, not this module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/config.go#Config.UnmarshalYAML"
+   },
+   {
+    "candidate": "Metrics address defaults to 127.0.0.1:41987 when enabled",
+    "covered_by": "proxy/config module (default applied in config.go)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/config.go#Config.UnmarshalYAML"
+   },
+   {
+    "candidate": "Backends naming an unknown provider or no model are skipped silently during back-fill",
+    "covered_by": "configuration.config-file.provider-models-inferred-from-virtual-models",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/configload.go#resolveModels"
+   },
+   {
+    "candidate": "Name-to-index lookup map and seen-set used during back-fill",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/configload.go#resolveModels"
+   },
+   {
+    "candidate": "base_url, addr and model names are not expanded from the environment",
+    "covered_by": "configuration.config-file.secrets-and-commands-read-from-environment",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/configload.go#LoadConfig"
+   }
+  ],
+  "proxy/cost": [
+   {
+    "candidate": "Cost tracker is safe under concurrent requests (mutex)",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cost.go#costTracker"
+   },
+   {
+    "candidate": "Price map is copied from config at construction",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cost.go#newCostTracker"
+   },
+   {
+    "candidate": "round4 half-up rounding implementation",
+    "covered_by": "usage.spend.session-summary-by-provider-and-model",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cost.go#round4"
+   },
+   {
+    "candidate": "Nil tracker returns empty summary / unpriced",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cost.go#costTracker.summary"
+   },
+   {
+    "candidate": "UnpricedModels sorted list shown on the dashboard",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/cost.go#costTracker.UnpricedModels"
+   },
+   {
+    "candidate": "usageSplit reads OpenAI and Anthropic usage vocabularies",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cost_test.go#TestUsageSplitReadsBothVocabularies"
+   },
+   {
+    "candidate": "usageTokens returns total for legacy callers",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/cost_test.go#TestUsageTokensStillWorksForCallersThatOnlyWantTheTotal"
+   },
+   {
+    "candidate": "Input and output tokens are billed at their own rates",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/cost.go#costTracker.cost"
+   },
+   {
+    "candidate": "When only a token total is known, it is priced at the output rate",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/cost.go#costTracker.cost"
+   },
+   {
+    "candidate": "Embedding requests are priced entirely at the input rate",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/proxy.go#Rotator.handleEmbeddings"
+   },
+   {
+    "candidate": "A model with no configured price is reported as unpriced, not as free",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/cost.go#costTracker.record"
+   },
+   {
+    "candidate": "A model priced at zero is free, not unpriced",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/cost.go#costTracker.cost"
+   },
+   {
+    "candidate": "Session spend is reported per provider and per model, with a total and a request count",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/cost.go#costTracker.summary"
+   },
+   {
+    "candidate": "Each served request's log line shows its cost only when pricing is configured",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/cost.go#Rotator.costNote"
+   }
+  ],
+  "proxy/dispatch": [
+   {
+    "candidate": "A 2xx reply marks the provider healthy (OK) in the dashboard",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/dispatch.go#Rotator.dispatch"
+   },
+   {
+    "candidate": "Metrics observed per error/request (transport vs status label)",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/dispatch.go#Rotator.blockRejected"
+   },
+   {
+    "candidate": "Upstream error body snippet limited to cliErrSnippet bytes",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/dispatch.go#Rotator.blockRejected"
+   },
+   {
+    "candidate": "Cooldown length/reason chosen per upstream status and body",
+    "covered_by": "routing/error-classification module",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/classify.go#classifyUpstream"
+   },
+   {
+    "candidate": "Re-encode failure returns 500",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.dispatch"
+   },
+   {
+    "candidate": "forward posts to base URL + path with the provider's bearer key and no client timeout",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/dispatch.go#forward"
+   },
+   {
+    "candidate": "Stream relay copies upstream bytes line by line with flush and upstream Content-Type",
+    "covered_by": "api-gateway/streaming module",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/dispatch.go#stream"
+   },
+   {
+    "candidate": "Usage read from OpenAI or Anthropic usage vocabularies, total derived from prompt+completion",
+    "covered_by": "usage-and-cost/token-usage module",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/dispatch.go#usageSplit"
+   },
+   {
+    "candidate": "No providers configured at all -> 503 'no providers configured with an API key and models'",
+    "covered_by": "cli-providers.eligibility.embeddings-cli-only-refused",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/dispatch.go#Rotator.candidatesFor"
+   },
+   {
+    "candidate": "dispatchStatus defaults non-dispatch errors to 503",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/dispatch.go#dispatchStatus"
+   },
+   {
+    "candidate": "A provider that fails is skipped and the next provider answers",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.dispatch"
+   },
+   {
+    "candidate": "Each provider is asked for its own configured model",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.dispatch"
+   },
+   {
+    "candidate": "When every provider fails, the caller gets a 503 naming the last failure",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.dispatch"
+   },
+   {
+    "candidate": "When every provider is already cooling down, the caller is told why and when to retry",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.blockedSummary"
+   },
+   {
+    "candidate": "A provider that rejects one model keeps serving its other models",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.blockRejected"
+   },
+   {
+    "candidate": "A provider that rejects its API key is shown as auth-failed",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.blockRejected"
+   },
+   {
+    "candidate": "Tool and embeddings requests go to an HTTP provider, never a CLI provider",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.candidatesFor"
+   },
+   {
+    "candidate": "A tool request for a model only CLI providers serve is refused with the reason",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.candidatesFor"
+   },
+   {
+    "candidate": "An embeddings request for a model only CLI providers serve is refused as if nothing were configured",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.candidatesFor"
+   }
+  ],
+  "proxy/health": [
+   {
+    "candidate": "Probe concurrency bounded to between 2 and 6 slots by CPU count",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/health.go#probeSlots"
+   },
+   {
+    "candidate": "15s probe timeout and 10s health_command timeout",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/health.go#healthClient"
+   },
+   {
+    "candidate": "3s delay before the retry; slot released during the wait",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/health.go#Rotator.CheckHealth"
+   },
+   {
+    "candidate": "Probe uses a free models listing so it spends no quota",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/health.go#probeProvider"
+   },
+   {
+    "candidate": "Base URL trailing slash trimmed before appending /models",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/health.go#probeProvider"
+   },
+   {
+    "candidate": "Probing stops and the re-probe loop exits on shutdown",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/health.go#Rotator.ReprobeLoop"
+   },
+   {
+    "candidate": "A provider that is unreachable on the first probe is tried once more before being reported down",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/health.go#Rotator.CheckHealth"
+   },
+   {
+    "candidate": "Provider states are re-checked on a timer so a recovered provider turns healthy without a request",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/health.go#Rotator.ReprobeLoop"
+   },
+   {
+    "candidate": "Every probe result is logged, and an unreachable provider's log line says why",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/health.go#Rotator.CheckHealth"
+   }
+  ],
+  "proxy/logbuffer": [
+   {
+    "candidate": "Concurrent writes and reads are mutex-guarded",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/logbuffer.go#logBuffer"
+   },
+   {
+    "candidate": "tail/allLines return copies so callers cannot mutate history",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/logbuffer.go#logBuffer.allLines"
+   },
+   {
+    "candidate": "tail with n<=0 returns nothing",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/logbuffer.go#logBuffer.tail"
+   },
+   {
+    "candidate": "Write always reports the full length and never errors",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/logbuffer.go#logBuffer.Write"
+   },
+   {
+    "candidate": "Handler accepts a nil log buffer",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/proxy.go#Handler"
+   },
+   {
+    "candidate": "A log line written in pieces shows up once, when it is complete",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/logbuffer.go#logBuffer.Write"
+   }
+  ],
+  "proxy/metrics": [
+   {
+    "candidate": "Label values with quotes, backslashes or newlines are escaped",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/metrics.go#escape"
+   },
+   {
+    "candidate": "Series are written in sorted order for a stable, diffable output",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/metrics.go#writeCounter"
+   },
+   {
+    "candidate": "Exact latency bucket boundaries and the cumulative/+Inf/sum encoding",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/metrics.go#latencyBuckets"
+   },
+   {
+    "candidate": "Metrics observers ignore a nil metrics collector",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/metrics.go#metrics.observeRequest"
+   },
+   {
+    "candidate": "Metrics and rotator locks are never held together, so there is no lock-order deadlock",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/metrics.go#metrics.write"
+   },
+   {
+    "candidate": "Hand-written exposition instead of client_golang",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "internal/proxy/metrics.go"
+   },
+   {
+    "candidate": "A metrics listener failure is logged and does not stop the proxy",
+    "covered_by": "usage.metrics.opt-in-own-listener",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/run.go#serveMetrics"
+   },
+   {
+    "candidate": "Metrics are off unless enabled, and then served on their own address",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/config.go#Config.UnmarshalYAML"
+   },
+   {
+    "candidate": "The scrape target needs no key and never exposes prompts or keys",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/metrics.go#Rotator.MetricsHandler"
+   },
+   {
+    "candidate": "Each successful upstream call is counted with its latency and tokens",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/metrics.go#metrics.observeRequest"
+   },
+   {
+    "candidate": "Each failed upstream call is counted by its HTTP status",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/metrics.go#metrics.observeError"
+   },
+   {
+    "candidate": "Cooldowns are counted by reason, and the gauge shows only live ones",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/metrics.go#Rotator.blockedCount"
+   },
+   {
+    "candidate": "Before any traffic, only the cooldown gauge is reported",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/metrics.go#metrics.write"
+   },
+   {
+    "candidate": "The metrics endpoint only answers reads",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/metrics.go#Rotator.MetricsHandler"
+   }
+  ],
+  "proxy/proxy": [
+   {
+    "candidate": "Inbound API key guards every endpoint except /health; /dashboard?key= exchanges the key for a cookie",
+    "covered_by": "api-gateway/access-control (auth module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/auth.go (wrapped by Handler via withAuth)"
+   },
+   {
+    "candidate": "GET /dashboard serves the self-contained HTML dashboard",
+    "covered_by": "dashboard/web-dashboard (web module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/web.go#handleDashboard"
+   },
+   {
+    "candidate": "/v1/messages Anthropic translation",
+    "covered_by": "api-gateway/anthropic-messages (anthropic module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/anthropic.go"
+   },
+   {
+    "candidate": "Failover to the next provider on 429 and cooldown taken from Retry-After",
+    "covered_by": "routing/failover (dispatch module); TestRotationFailover",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/dispatch.go#Rotator.dispatch"
+   },
+   {
+    "candidate": "Upstream status classification and model-scoped blocks",
+    "covered_by": "routing/error-classification; TestClassifyUpstream, TestModelScopedBlockKeepsSiblingsRoutable, TestCooldown",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/classify.go"
+   },
+   {
+    "candidate": "Global RPD quota returns 503 after the cap",
+    "covered_by": "routing/cooldowns-quotas; TestGlobalQuotaCapsAcrossProviders",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/ratelimit.go"
+   },
+   {
+    "candidate": "No usable provider / tools sent only to CLI providers gives 503 with no Retry-After",
+    "covered_by": "routing/provider-rotation (dispatch module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/dispatch.go#Rotator.candidatesFor"
+   },
+   {
+    "candidate": "Providers without a key or models are not routed",
+    "covered_by": "routing/provider-rotation; TestActiveSkipsUnconfigured",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/rotator.go#Provider.isActive"
+   },
+   {
+    "candidate": "/v1/models and /v1/status refuse non-GET with 405",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/proxy.go#Rotator.handleModels"
+   },
+   {
+    "candidate": "Token usage recorded and cost note logged per request",
+    "covered_by": "usage-and-cost/token-usage",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/proxy.go#Rotator.handleChat"
+   },
+   {
+    "candidate": "Unreadable embeddings reply from a provider gives 502 \"chicco: read upstream response\"",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/proxy.go#Rotator.handleEmbeddings"
+   },
+   {
+    "candidate": "writeJSON ignores write errors after the headers are sent",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/proxy.go#writeJSON"
+   },
+   {
+    "candidate": "field/asObject treat missing or wrong-typed fields as absent",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/proxy.go#field"
+   },
+   {
+    "candidate": "The status snapshot reports providers, recent logs, today's totals and spend",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/proxy.go#Rotator.handleStatus"
+   },
+   {
+    "candidate": "Any web page may read the status snapshot",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/proxy.go#Rotator.handleStatus"
+   },
+   {
+    "candidate": "The catalog lists chicco:auto first, then virtual models, then aliases naming their target",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/proxy.go#Rotator.handleModels"
+   },
+   {
+    "candidate": "A virtual model nobody can currently serve is hidden from the catalog",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/route.go#Rotator.servable"
+   },
+   {
+    "candidate": "The model a caller asks for is replaced by the model chicco routes to",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/dispatch.go#Rotator.dispatch"
+   },
+   {
+    "candidate": "A streamed chat completion asks the provider for a final usage chunk",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/proxy.go#Rotator.handleChat"
+   },
+   {
+    "candidate": "Embeddings come back verbatim from an HTTP provider, never from a CLI tool",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/proxy.go#Rotator.handleEmbeddings"
+   }
+  ],
+  "proxy/ratelimit": [
+   {
+    "candidate": "Events are kept in a fixed-size ring buffer, with a head and size cursor",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/ratelimit.go#eventLog"
+   },
+   {
+    "candidate": "toSlice exports the events for the state file",
+    "covered_by": "",
+    "reason": "TECH_PERSISTENCE",
+    "source": "internal/proxy/ratelimit.go#toSlice"
+   },
+   {
+    "candidate": "The fallback unblock is one full window when no in-window event is found",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/ratelimit.go#check"
+   },
+   {
+    "candidate": "The 25-hour pruning on restore, as a persistence detail",
+    "covered_by": "routing.rate-limits.limits-survive-restart",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/ratelimit.go#loadSlice"
+   }
+  ],
+  "proxy/reload": [
+   {
+    "candidate": "Per-backend (provider/model) quota counters kept across reload",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "Health and round-robin index forgotten for removed providers",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "Default webhook timeout applied when reloaded alerts set none",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "Nil aliases normalised to an empty table",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "forget generic helper deletes keys not in keep set",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload.go#forget"
+   },
+   {
+    "candidate": "Usage and cooldowns survive a reload",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "A provider removed from the config disappears with its usage",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "Changing the listen address needs a restart",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   },
+   {
+    "candidate": "A reload does not repeat a quota alert already sent this window",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/reload.go#Rotator.Reload"
+   }
+  ],
+  "proxy/reload-unix": [
+   {
+    "candidate": "The signal subscription is stopped when the run context ends",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload_unix.go#watchSIGHUP"
+   },
+   {
+    "candidate": "SIGHUP is a no-op on Windows",
+    "covered_by": "Belongs to the Windows reload module, not this file",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/reload_windows.go#watchSIGHUP"
+   },
+   {
+    "candidate": "Health probes re-run after a successful reload",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload.go#reloadFromFile"
+   },
+   {
+    "candidate": "Providers that survive a reload keep their counters and cooldowns",
+    "covered_by": "Enforced in Rotator.Reload, which this module doesn't own",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/reload.go#reloadFromFile"
+   }
+  ],
+  "proxy/reload-windows": [
+   {
+    "candidate": "watchSIGHUP accepts the context, rotator and path but ignores them (a stub kept so the code builds on every platform)",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/reload_windows.go#watchSIGHUP"
+   }
+  ],
+  "proxy/rotator": [
+   {
+    "candidate": "A provider not yet probed (health unknown) is still routable",
+    "covered_by": "enforced in internal/proxy/route.go, not this module; specify it there",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/rotator.go#Health"
+   },
+   {
+    "candidate": "Health states drive the dashboard dot colours (checking/grey)",
+    "covered_by": "dashboard/provider-view (internal/proxy/uiprovider.go)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/rotator.go#Health"
+   },
+   {
+    "candidate": "Usage recorded per provider, per provider/model and globally on each request",
+    "covered_by": "usage-and-cost/token-usage and routing/cooldowns-quotas (the quota enforcement in pick)",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/rotator.go#Rotator.recordUsage"
+   },
+   {
+    "candidate": "Backends declaring their own quota get a separate per-model quota window",
+    "covered_by": "routing/cooldowns-quotas (enforced in pick)",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/rotator.go#NewRotator"
+   },
+   {
+    "candidate": "Global top-level quota caps all providers combined",
+    "covered_by": "enforced in pick (route.go); see TestGlobalQuotaCapsAcrossProviders",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/rotator.go#NewRotator"
+   },
+   {
+    "candidate": "Blocking a provider records a cooldown deadline and reason, persisted across restarts",
+    "covered_by": "routing/cooldowns-quotas and usage-and-cost/usage-persistence",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/rotator.go#Rotator.block"
+   },
+   {
+    "candidate": "Alias table copy exposed for status and UI",
+    "covered_by": "provider-health/health-endpoint and api-gateway/model-catalog",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/rotator.go#Rotator.Aliases"
+   },
+   {
+    "candidate": "Random source seeded from clock for weighted picks",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/rotator.go#NewRotator"
+   },
+   {
+    "candidate": "Proxy auth key held on the rotator",
+    "covered_by": "api-gateway/access-control (checked outside this file)",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/rotator.go#Rotator"
+   },
+   {
+    "candidate": "A request for an alias is routed exactly as a request for its model",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/rotator.go#Rotator.resolveAlias"
+   }
+  ],
+  "proxy/route": [
+   {
+    "candidate": "Alias resolution is logged as 'chicco: alias X -> Y'",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/route.go#activeForModel"
+   },
+   {
+    "candidate": "Model cursor is committed before the quota checks so a blocked model is not re-chosen in the same failover loop",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/route.go#pick"
+   },
+   {
+    "candidate": "A single shared rule for global, provider and per-model quota checks (tripQuota) and marking state dirty for persistence",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/route.go#tripQuota"
+   },
+   {
+    "candidate": "Weighted strategy treats an unset or zero weight as 1",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/route.go#providerWeight"
+   },
+   {
+    "candidate": "Round-robin with no active providers returns an empty order",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/route.go#order"
+   },
+   {
+    "candidate": "A model blocked upstream (provider/model cooldown) is skipped by the provider pick",
+    "covered_by": "quotas.limits.model-limit-benches-only-that-model",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/route.go#pick"
+   },
+   {
+    "candidate": "Providers in cooldown are skipped by pick",
+    "covered_by": "quotas.limits.provider-limit-benches-provider",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/route.go#inCooldown"
+   }
+  ],
+  "proxy/run": [
+   {
+    "candidate": "Health probes at boot and re-probe every 5 minutes",
+    "covered_by": "provider-health/health-probes",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/run.go#Run"
+   },
+   {
+    "candidate": "Config reload on SIGHUP",
+    "covered_by": "configuration/hot-reload",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/run.go#Run"
+   },
+   {
+    "candidate": "Usage counters saved every 10 seconds and on dashboard exit",
+    "covered_by": "usage-and-cost/usage-persistence",
+    "reason": "TECH_PERSISTENCE",
+    "source": "internal/proxy/run.go#serveDashboard"
+   },
+   {
+    "candidate": "Metrics served on a separate listener; its failure does not stop the proxy",
+    "covered_by": "usage-and-cost/metrics",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/run.go#serveMetrics"
+   },
+   {
+    "candidate": "10-second request-header read timeout",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/run.go#readHeaderTimeout"
+   },
+   {
+    "candidate": "Rotator wiring of auth key, quota, aliases, pricing, alerts",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/run.go#newRotator"
+   },
+   {
+    "candidate": "Log buffer of 500 lines",
+    "covered_by": "dashboard/live-logs",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/run.go#Run"
+   }
+  ],
+  "proxy/state": [
+   {
+    "candidate": "Persist is a no-op when no state path is set or nothing changed",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/state.go#Persist"
+   },
+   {
+    "candidate": "JSON field layout of the state file (event_logs, model_tokens, blocked, reason, updated)",
+    "covered_by": "",
+    "reason": "TECH_PERSISTENCE",
+    "source": "internal/proxy/state.go#persistedState"
+   },
+   {
+    "candidate": "Saving every ten seconds and warning once when the state file cannot be written",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/run.go#persistLoop"
+   },
+   {
+    "candidate": "-state flag default chicco-state.json, empty disables persistence",
+    "covered_by": "operations/startup (command-line flags)",
+    "reason": "DUPLICATE_OF",
+    "source": "cmd/chicco/main.go#main"
+   }
+  ],
+  "proxy/stats": [
+   {
+    "candidate": "Snapshot takes the rotator lock so it can be called concurrently with request handling",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "Providers are listed in configuration order",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "Per-model lifetime token and request counters (tokens, requests) in the snapshot",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "Provider health value carried into the snapshot",
+    "covered_by": "provider-health/health-probes (health state is decided and owned by the probes)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "How the terminal and web dashboards render the snapshot (bars, colours, labels)",
+    "covered_by": "dashboard/provider-view",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/stats.go#ProviderStat"
+   },
+   {
+    "candidate": "A provider's quota usage is measured over its largest configured limit window",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "A provider without a key or without models is reported inactive",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "A cooling-down provider reports how long is left and why",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "A provider whose cooldown has run out reports no cooldown",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "Today's totals cover only active providers since UTC midnight",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/stats.go#Rotator.DailyTotals"
+   },
+   {
+    "candidate": "A model with its own quota reports that quota and its usage within that window",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   },
+   {
+    "candidate": "A model with its own request cap reports its lifetime request count against that cap",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/stats.go#Rotator.Snapshot"
+   }
+  ],
+  "proxy/test": [
+   {
+    "candidate": "Test runs in a background goroutine so the dashboard stays responsive",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/ui.go#uiModel.key"
+   },
+   {
+    "candidate": "Each probe has a 90-second timeout",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/test.go#testOne"
+   },
+   {
+    "candidate": "Reply text parsing from streamed delta or non-streamed message content",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/test.go#contentDelta"
+   },
+   {
+    "candidate": "Health check of all providers before the probe",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/test.go#runTest"
+   },
+   {
+    "candidate": "Error body snippet capped at 300 bytes and whitespace-collapsed to 60 characters",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/test.go#failDetail"
+   }
+  ],
+  "proxy/ui": [
+   {
+    "candidate": "Colour palette and lipgloss styles (green/amber/red/grey, box borders)",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/ui.go#renderTrack"
+   },
+   {
+    "candidate": "Scrollbar thumb rendered brighter than the track",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/ui.go#renderTrack"
+   },
+   {
+    "candidate": "Redraw is polled rather than pushed so a busy proxy cannot flood the UI",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/ui.go#tick"
+   },
+   {
+    "candidate": "Log pane minimum height of 4 lines on tiny terminals",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/ui.go#uiModel.View"
+   },
+   {
+    "candidate": "A second test run while one is in progress is refused",
+    "covered_by": "belongs to provider-health/model-testing (runTest), not this module",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/test.go#runTest"
+   },
+   {
+    "candidate": "Usage token parsing, log ring buffer, error-line highlighting, usage bars, quota cells (tested in ui_test.go)",
+    "covered_by": "implemented outside ui.go (uirender.go, log buffer, usage); belongs to dashboard/provider-view, dashboard/live-logs and usage-and-cost modules",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui_test.go#TestUsageTokens"
+   },
+   {
+    "candidate": "The quit shortcuts close the dashboard and stop the proxy",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui.go#uiModel.key"
+   },
+   {
+    "candidate": "The test shortcut probes every model while the dashboard stays live",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui.go#uiModel.key"
+   },
+   {
+    "candidate": "Tab moves keyboard focus between the provider table and the log pane",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui.go#uiModel.key"
+   },
+   {
+    "candidate": "Arrow keys scroll only the focused pane, and stop at its start or newest line",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui.go#uiModel.scrollBack"
+   },
+   {
+    "candidate": "Page keys jump the focused pane by half the log pane's height",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui.go#uiModel.pageSize"
+   },
+   {
+    "candidate": "The dashboard shows the provider table above a log pane taking two fifths of the screen",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui.go#uiModel.View"
+   },
+   {
+    "candidate": "The dashboard shows a starting message until the terminal size is known",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/ui.go#uiModel.View"
+   }
+  ],
+  "proxy/uiprovider": [
+   {
+    "candidate": "Bar width derived from terminal width (6\u201364 cells, 12 reserved for a cooldown suffix)",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/uiprovider.go#newUsageBar"
+   },
+   {
+    "candidate": "Continuation rows leave name/kind blank so model names line up in one column",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/uiprovider.go#providerRows"
+   },
+   {
+    "candidate": "Bar colour thresholds (green/amber/red at 60%/85%) and clamping",
+    "covered_by": "enforced in the uirender module, not this one",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/uirender.go#renderBar"
+   },
+   {
+    "candidate": "Token count abbreviation (1.2M, 4.5k)",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/uirender.go#fmtTok"
+   }
+  ],
+  "proxy/uirender": [
+   {
+    "candidate": "Table columns have fixed widths and long provider/model names are cut with an ellipsis, counting characters rather than bytes",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/uirender.go#modelRow"
+   },
+   {
+    "candidate": "Rows without a usage bar are padded so the scrollbar lines up in the last column",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/uirender.go#uiModel.renderModels"
+   },
+   {
+    "candidate": "The focused pane's border is highlighted",
+    "covered_by": "",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/uirender.go#uiModel.renderLogs"
+   },
+   {
+    "candidate": "The usage bar is at least 4 columns wide and its fill is rounded to the nearest column",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/uirender.go#renderBar"
+   },
+   {
+    "candidate": "The scrollbar thumb is sized by the fraction of rows visible, with a minimum of one cell",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/uirender.go#scrollbarColumn"
+   },
+   {
+    "candidate": "Padding helpers that count characters for padRight and truncate",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/uirender.go#padRight"
+   },
+   {
+    "candidate": "The dashboard header summarises today's traffic",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/uirender.go#uiModel.renderModels"
+   },
+   {
+    "candidate": "The log pane shows the newest lines and scrolls back no further than the oldest",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/uirender.go#uiModel.renderLogs"
+   },
+   {
+    "candidate": "The provider table scrolls no further than its last screenful and shows no scrollbar when everything fits",
+    "covered_by": "",
+    "reason": "UNVERIFIABLE",
+    "source": "internal/proxy/uirender.go#uiModel.renderModels"
+   }
+  ],
+  "proxy/validate": [
+   {
+    "candidate": "A reload whose config has hard validation errors is rejected and the running config is kept; warnings are only logged",
+    "covered_by": "configuration/hot-reload (reloadFromFile owns this rule; specify it in that module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/reload.go#reloadFromFile"
+   },
+   {
+    "candidate": "Problems are reported in a fixed order per provider (enums, then numbers, then required fields)",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/validate.go#validateProvider"
+   },
+   {
+    "candidate": "Aliases are checked in sorted name order so the same error is reported when several are wrong",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/validate.go#validateAliases"
+   },
+   {
+    "candidate": "Each separate negative quota window (rpm, rph, rpd, tpm, tph, tpd) as its own case",
+    "covered_by": "configuration.check.hard-errors-fail",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/validate.go#quotaNegative"
+   },
+   {
+    "candidate": "Empty kind, output and strategy are accepted as the defaults",
+    "covered_by": "configuration.check.sound-config-passes",
+    "reason": "TRIVIAL",
+    "source": "internal/proxy/validate.go#knownKinds"
+   },
+   {
+    "candidate": "Validate never panics on fuzzed config input",
+    "covered_by": "",
+    "reason": "TECH_DEVTOOLING",
+    "source": "internal/proxy/fuzz_test.go"
+   }
+  ],
+  "proxy/web": [
+   {
+    "candidate": "The /dashboard?key= login that swaps the proxy key for a cookie, and refuses a wrong key with 401",
+    "covered_by": "api-gateway/access-control (internal/proxy/auth.go withAuth, the access-control module)",
+    "reason": "DUPLICATE_OF",
+    "source": "internal/proxy/auth.go#withAuth"
+   },
+   {
+    "candidate": "The page reloads its data from /v1/status once a second and draws the provider table and the log pane",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/web.go#handleDashboard"
+   },
+   {
+    "candidate": "The HTML is compiled into the binary with go:embed",
+    "covered_by": "",
+    "reason": "TECH_BUILD",
+    "source": "internal/proxy/web.go#dashboardHTML"
+   },
+   {
+    "candidate": "A failed write of the page body is ignored",
+    "covered_by": "",
+    "reason": "INTERNAL_MECHANISM",
+    "source": "internal/proxy/web.go#handleDashboard"
+   }
+  ]
+ },
+ "lifted": {
+  "chart/check": [],
+  "chicco/dockerfile": [],
+  "chicco/install": [],
+  "chicco/makefile": [],
+  "cmd/chicco": [],
+  "proxy/alert": [
+   {
+    "from_source": "internal/proxy/alert.go#Alert",
+    "rule": "Quota webhook payloads never carry prompts, completions or API keys, only provider usage figures"
+   }
+  ],
+  "proxy/anthropic": [
+   {
+    "from_source": "internal/proxy/cost.go#costTracker.cost",
+    "rule": "api-gateway.anthropic-messages.spend-priced-at-output-rate"
+   }
+  ],
+  "proxy/anthropic-json": [],
+  "proxy/anthropic-request": [],
+  "proxy/anthropic-sse": [],
+  "proxy/anthropic-stream": [],
+  "proxy/auth": [
+   {
+    "from_source": "internal/proxy/reload.go#Reload",
+    "rule": "gateway.access.key-change-applies-on-reload"
+   }
+  ],
+  "proxy/classify": [],
+  "proxy/cli": [],
+  "proxy/clierrors": [],
+  "proxy/clisynth": [],
+  "proxy/clock": [],
+  "proxy/config": [
+   {
+    "from_source": "internal/proxy/configload.go#LoadConfig",
+    "rule": "config.listen.default-loopback: with no addr the proxy binds to loopback only, so the keyless default config never exposes provider keys"
+   }
+  ],
+  "proxy/configload": [],
+  "proxy/cost": [],
+  "proxy/dispatch": [],
+  "proxy/health": [],
+  "proxy/logbuffer": [],
+  "proxy/metrics": [
+   {
+    "from_source": "internal/proxy/metrics.go#metrics.write",
+    "rule": "The metrics scrape target never carries prompts, caller keys or provider keys; labels come only from configured provider and model names, HTTP statuses and cooldown reasons"
+   }
+  ],
+  "proxy/proxy": [
+   {
+    "from_source": "internal/proxy/route.go#Rotator.servable",
+    "rule": "A virtual model whose every backend is down or rejecting its key is hidden from /v1/models"
+   },
+   {
+    "from_source": "internal/proxy/dispatch.go#Rotator.candidatesFor",
+    "rule": "Embeddings are never served by a CLI provider"
+   }
+  ],
+  "proxy/ratelimit": [
+   {
+    "from_source": "internal/proxy/ratelimit.go#loadSlice",
+    "rule": "routing.rate-limits.limits-survive-restart"
+   }
+  ],
+  "proxy/reload": [
+   {
+    "from_source": "internal/proxy/reload.go#forget",
+    "rule": "config.hot-reload.removed-provider-forgotten: a removed provider's usage is not kept in the saved state"
+   }
+  ],
+  "proxy/reload-unix": [
+   {
+    "from_source": "internal/proxy/reload.go#reloadFromFile",
+    "rule": "configuration.hot-reload.bad-edit-keeps-running-config"
+   }
+  ],
+  "proxy/reload-windows": [],
+  "proxy/rotator": [],
+  "proxy/route": [],
+  "proxy/run": [],
+  "proxy/state": [
+   {
+    "from_source": "internal/proxy/state.go#Persist",
+    "rule": "usage.persistence.state-file-owner-only"
+   },
+   {
+    "from_source": "internal/proxy/state.go#EnablePersistence",
+    "rule": "usage.persistence.active-cooldown-survives-restart"
+   }
+  ],
+  "proxy/stats": [],
+  "proxy/test": [],
+  "proxy/ui": [],
+  "proxy/uiprovider": [],
+  "proxy/uirender": [],
+  "proxy/validate": [],
+  "proxy/web": []
+ },
+ "retired": [],
+ "scenarios": {
+  "api-gateway.access-control.001": {
+   "file": "specs/api-gateway/access-control/proxy-access-key.feature",
+   "fingerprint": "9edf2a1df605",
+   "human": false,
+   "rule": "gateway.access.open-without-key",
+   "source": "internal/proxy/auth.go#withAuth",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestInboundAuth",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestInboundAuth"
+   ]
+  },
+  "api-gateway.access-control.002": {
+   "file": "specs/api-gateway/access-control/proxy-access-key.feature",
+   "fingerprint": "e813c75fedad",
+   "human": false,
+   "rule": "gateway.access.bearer-key-admits",
+   "source": "internal/proxy/auth.go#bearerMatches",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestInboundAuth",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestInboundAuth"
+   ]
+  },
+  "api-gateway.access-control.003": {
+   "file": "specs/api-gateway/access-control/proxy-access-key.feature",
+   "fingerprint": "9edf2a1df605",
+   "human": false,
+   "rule": "gateway.access.unauthenticated-refused",
+   "source": "internal/proxy/auth.go#withAuth",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestInboundAuth",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestInboundAuth"
+   ]
+  },
+  "api-gateway.access-control.004": {
+   "file": "specs/api-gateway/access-control/proxy-access-key.feature",
+   "fingerprint": "9edf2a1df605",
+   "human": false,
+   "rule": "gateway.access.health-always-open",
+   "source": "internal/proxy/auth.go#withAuth",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestInboundAuth",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestInboundAuth"
+   ]
+  },
+  "api-gateway.access-control.005": {
+   "file": "specs/api-gateway/access-control/proxy-access-key.feature",
+   "fingerprint": "9edf2a1df605",
+   "human": false,
+   "rule": "gateway.access.dashboard-key-exchange",
+   "source": "internal/proxy/auth.go#withAuth",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestInboundAuth",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestInboundAuth"
+   ]
+  },
+  "api-gateway.access-control.006": {
+   "file": "specs/api-gateway/access-control/proxy-access-key.feature",
+   "fingerprint": "11d0168906cf",
+   "human": false,
+   "rule": "gateway.access.key-change-applies-on-reload",
+   "source": "internal/proxy/auth.go#currentAuthKey",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.anthropic-messages.001": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-message-replies.feature",
+   "fingerprint": "162a16062438",
+   "human": false,
+   "rule": "api-gateway.anthropic-messages.single-message-object",
+   "source": "internal/proxy/anthropic_json.go#respondAnthropicJSON",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestMessagesNonStreaming",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestMessagesNonStreaming"
+   ]
+  },
+  "api-gateway.anthropic-messages.002": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-message-replies.feature",
+   "fingerprint": "5a2e72b648ba",
+   "human": false,
+   "rule": "api-gateway.anthropic-messages.stop-reason-mapping",
+   "source": "internal/proxy/anthropic_stream.go#mapStopReason",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestMessagesNonStreaming",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestMessagesNonStreaming",
+    "internal/proxy/anthropic_test.go#TestMessagesToolUse"
+   ]
+  },
+  "api-gateway.anthropic-messages.003": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-message-replies.feature",
+   "fingerprint": "162a16062438",
+   "human": false,
+   "rule": "api-gateway.anthropic-messages.message-id-and-model-from-provider",
+   "source": "internal/proxy/anthropic_json.go#respondAnthropicJSON",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.anthropic-messages.004": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-message-replies.feature",
+   "fingerprint": "162a16062438",
+   "human": false,
+   "rule": "api-gateway.anthropic-messages.empty-reply-still-succeeds",
+   "source": "internal/proxy/anthropic_json.go#respondAnthropicJSON",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.anthropic-messages.005": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-request-translation.feature",
+   "fingerprint": "d1757036176f",
+   "human": false,
+   "rule": "anthropic-messages.request.invalid-request-rejected",
+   "source": "internal/proxy/anthropic_request.go#anthropicToOpenAI",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.anthropic-messages.006": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-request-translation.feature",
+   "fingerprint": "8efb94ffc83e",
+   "human": false,
+   "rule": "anthropic-messages.request.conversation-reaches-provider",
+   "source": "internal/proxy/anthropic_request.go#anthropicMessages",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestAnthropicToOpenAI",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestAnthropicToOpenAI",
+    "internal/proxy/cli_test.go#TestRunCLIViaAnthropicEndpointGetsThePrompt"
+   ]
+  },
+  "api-gateway.anthropic-messages.007": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-request-translation.feature",
+   "fingerprint": "ecf51cb7ec43",
+   "human": false,
+   "rule": "anthropic-messages.request.tool-turns-preserved",
+   "source": "internal/proxy/anthropic_request.go#convertAnthropicMessage",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestAnthropicToOpenAI",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestAnthropicToOpenAI"
+   ]
+  },
+  "api-gateway.anthropic-messages.008": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-request-translation.feature",
+   "fingerprint": "eb1bdbbdccb4",
+   "human": false,
+   "rule": "anthropic-messages.request.tool-choice-mapped",
+   "source": "internal/proxy/anthropic_request.go#anthropicToolChoice",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.anthropic-messages.009": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-request-translation.feature",
+   "fingerprint": "e09e5307971a",
+   "human": false,
+   "rule": "anthropic-messages.request.optional-settings-forwarded-when-set",
+   "source": "internal/proxy/anthropic_request.go#anthropicOptions",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.anthropic-messages.010": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-request-translation.feature",
+   "fingerprint": "d1757036176f",
+   "human": false,
+   "rule": "anthropic-messages.request.max-tokens-always-sent",
+   "source": "internal/proxy/anthropic_request.go#anthropicToOpenAI",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestAnthropicToOpenAI",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestAnthropicToOpenAI"
+   ]
+  },
+  "api-gateway.anthropic-messages.011": {
+   "file": "specs/api-gateway/anthropic-messages/anthropic-request-translation.feature",
+   "fingerprint": "2b409f708ac4",
+   "human": false,
+   "rule": "anthropic-messages.request.non-text-blocks-dropped",
+   "source": "internal/proxy/anthropic_request.go#userMessages",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.chat-completions.001": {
+   "file": "specs/api-gateway/chat-completions/openai-forwarding.feature",
+   "fingerprint": "1e6e6f3db908",
+   "human": false,
+   "rule": "api-gateway.openai.invalid-requests-rejected",
+   "source": "internal/proxy/proxy.go#readPostedJSON",
+   "status": "gap",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.chat-completions.002": {
+   "file": "specs/api-gateway/chat-completions/openai-forwarding.feature",
+   "fingerprint": "de4652825b67",
+   "human": false,
+   "rule": "api-gateway.openai.exhausted-503-with-retry-after",
+   "source": "internal/proxy/proxy.go#setRetryAfter",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestExhaustedRetryAfter",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestExhaustedRetryAfter"
+   ]
+  },
+  "api-gateway.model-catalog.001": {
+   "file": "specs/api-gateway/model-catalog/model-catalog-servable-models.feature",
+   "fingerprint": "02b12b2979b7",
+   "human": false,
+   "rule": "catalog.models.hide-dead-virtual-models",
+   "source": "internal/proxy/route.go#servable",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestModelsEndpointHidesDeadModels",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestModelsEndpointHidesDeadModels"
+   ]
+  },
+  "api-gateway.model-catalog.002": {
+   "file": "specs/api-gateway/model-catalog/model-catalog-servable-models.feature",
+   "fingerprint": "02b12b2979b7",
+   "human": false,
+   "rule": "catalog.models.unmatched-backends-stay-listed",
+   "source": "internal/proxy/route.go#servable",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.streaming.001": {
+   "file": "specs/api-gateway/streaming/anthropic-message-streaming.feature",
+   "fingerprint": "70eb8d2488f1",
+   "human": false,
+   "rule": "messages.streaming.anthropic-event-sequence",
+   "source": "internal/proxy/anthropic_sse.go#respondAnthropicStream",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestMessagesStreaming",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestMessagesStreaming"
+   ]
+  },
+  "api-gateway.streaming.002": {
+   "file": "specs/api-gateway/streaming/anthropic-message-streaming.feature",
+   "fingerprint": "73e6ce8c24f9",
+   "human": false,
+   "rule": "messages.streaming.tool-use-blocks",
+   "source": "internal/proxy/anthropic_sse.go#sseSink",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.streaming.003": {
+   "file": "specs/api-gateway/streaming/anthropic-message-streaming.feature",
+   "fingerprint": "6178d274f055",
+   "human": false,
+   "rule": "messages.streaming.events-delivered-incrementally",
+   "source": "internal/proxy/anthropic_sse.go#writeSSEEvent",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.streaming.004": {
+   "file": "specs/api-gateway/streaming/anthropic-message-streaming.feature",
+   "fingerprint": "73e6ce8c24f9",
+   "human": false,
+   "rule": "messages.streaming.usage-reports-output-tokens-only",
+   "source": "internal/proxy/anthropic_sse.go#sseSink",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.streaming.005": {
+   "file": "specs/api-gateway/streaming/anthropic-message-streaming.feature",
+   "fingerprint": "73e6ce8c24f9",
+   "human": false,
+   "rule": "messages.streaming.fallback-message-id",
+   "source": "internal/proxy/anthropic_sse.go#sseSink",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.streaming.006": {
+   "file": "specs/api-gateway/streaming/anthropic-message-streaming.feature",
+   "fingerprint": "70eb8d2488f1",
+   "human": false,
+   "rule": "messages.streaming.cut-off-upstream-looks-complete",
+   "source": "internal/proxy/anthropic_sse.go#respondAnthropicStream",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.streaming.007": {
+   "file": "specs/api-gateway/streaming/anthropic-message-streaming.feature",
+   "fingerprint": "73e6ce8c24f9",
+   "human": false,
+   "rule": "messages.streaming-empty-upstream-omits-message-start",
+   "source": "internal/proxy/anthropic_sse.go#sseSink",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "api-gateway.streaming.008": {
+   "file": "specs/api-gateway/streaming/anthropic-reply-translation.feature",
+   "fingerprint": "09ddd03268a7",
+   "human": false,
+   "rule": "anthropic.stream.event-sequence",
+   "source": "internal/proxy/anthropic_stream.go#translateOpenAIStream",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestMessagesStreaming",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestMessagesStreaming"
+   ]
+  },
+  "api-gateway.streaming.009": {
+   "file": "specs/api-gateway/streaming/anthropic-reply-translation.feature",
+   "fingerprint": "5a2e72b648ba",
+   "human": false,
+   "rule": "anthropic.stream.stop-reason-mapping",
+   "source": "internal/proxy/anthropic_stream.go#mapStopReason",
+   "status": "verified",
+   "test": "internal/proxy/anthropic_test.go#TestMessagesNonStreaming",
+   "tests": [
+    "internal/proxy/anthropic_test.go#TestMessagesNonStreaming",
+    "internal/proxy/anthropic_test.go#TestMessagesToolUse",
+    "internal/proxy/anthropic_test.go#TestMessagesStreaming"
+   ]
+  },
+  "cli-providers.cli-errors.001": {
+   "file": "specs/cli-providers/cli-errors/cli-failure-reporting.feature",
+   "fingerprint": "86d6c0bbaf83",
+   "human": false,
+   "rule": "cli-providers.errors.logged-out-tool-greyed-out",
+   "source": "internal/proxy/clierrors.go#cliFailure",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestCLIFailureClassifies",
+   "tests": [
+    "internal/proxy/cli_test.go#TestCLIFailureClassifies",
+    "internal/proxy/cli_test.go#TestCLIFailureKeepsTheReason"
+   ]
+  },
+  "cli-providers.cli-errors.002": {
+   "file": "specs/cli-providers/cli-errors/cli-failure-reporting.feature",
+   "fingerprint": "dcb7f1c5a557",
+   "human": false,
+   "rule": "cli-providers.errors.usage-limit-benched-until-reset",
+   "source": "internal/proxy/clierrors.go#parseResetDuration",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestCLIFailureClassifies",
+   "tests": [
+    "internal/proxy/cli_test.go#TestCLIFailureClassifies",
+    "internal/proxy/cli_test.go#TestParseResetDuration"
+   ]
+  },
+  "cli-providers.cli-errors.003": {
+   "file": "specs/cli-providers/cli-errors/cli-failure-reporting.feature",
+   "fingerprint": "47238f241026",
+   "human": false,
+   "rule": "cli-providers.errors.clock-reset-next-occurrence",
+   "source": "internal/proxy/clierrors.go#clockReset",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestParseResetDuration",
+   "tests": [
+    "internal/proxy/cli_test.go#TestParseResetDuration"
+   ]
+  },
+  "cli-providers.cli-errors.004": {
+   "file": "specs/cli-providers/cli-errors/cli-failure-reporting.feature",
+   "fingerprint": "86d6c0bbaf83",
+   "human": false,
+   "rule": "cli-providers.errors.other-failures-transient",
+   "source": "internal/proxy/clierrors.go#cliFailure",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestCLIFailureClassifies",
+   "tests": [
+    "internal/proxy/cli_test.go#TestCLIFailureClassifies"
+   ]
+  },
+  "cli-providers.cli-errors.005": {
+   "file": "specs/cli-providers/cli-errors/cli-failure-reporting.feature",
+   "fingerprint": "86d6c0bbaf83",
+   "human": false,
+   "rule": "cli-providers.errors.reason-kept-in-error-reply",
+   "source": "internal/proxy/clierrors.go#cliFailure",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestCLIFailureKeepsTheReason",
+   "tests": [
+    "internal/proxy/cli_test.go#TestCLIFailureKeepsTheReason"
+   ]
+  },
+  "cli-providers.cli-errors.006": {
+   "file": "specs/cli-providers/cli-errors/cli-failure-reporting.feature",
+   "fingerprint": "86d6c0bbaf83",
+   "human": false,
+   "rule": "cli-providers.errors.broad-wording-misclassifies",
+   "source": "internal/proxy/clierrors.go#cliFailure",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "cli-providers.cli-execution.001": {
+   "file": "specs/cli-providers/cli-execution/running-cli-providers.feature",
+   "fingerprint": "3d029a60cf09",
+   "human": false,
+   "rule": "cli.execution.request-templated-into-command",
+   "source": "internal/proxy/cli.go#runCLI",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestRunCLIEndToEnd",
+   "tests": [
+    "internal/proxy/cli_test.go#TestRunCLIEndToEnd",
+    "internal/proxy/cli_test.go#TestRunCLIViaAnthropicEndpointGetsThePrompt",
+    "internal/proxy/cli_test.go#TestSplitMessages"
+   ]
+  },
+  "cli-providers.cli-execution.002": {
+   "file": "specs/cli-providers/cli-execution/running-cli-providers.feature",
+   "fingerprint": "012b4f65b2cd",
+   "human": false,
+   "rule": "cli.execution.failed-run-fails-over",
+   "source": "internal/proxy/cli.go#cliRun",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestRunCLIFailureFailsOver",
+   "tests": [
+    "internal/proxy/cli_test.go#TestRunCLIFailureFailsOver"
+   ]
+  },
+  "cli-providers.cli-execution.003": {
+   "file": "specs/cli-providers/cli-execution/running-cli-providers.feature",
+   "fingerprint": "00881026003f",
+   "human": false,
+   "rule": "cli.execution.reported-error-not-served",
+   "source": "internal/proxy/cli.go#extractCompletion",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestDotGetAndExtract",
+   "tests": [
+    "internal/proxy/cli_test.go#TestDotGetAndExtract"
+   ]
+  },
+  "cli-providers.cli-execution.004": {
+   "file": "specs/cli-providers/cli-execution/running-cli-providers.feature",
+   "fingerprint": "012b4f65b2cd",
+   "human": false,
+   "rule": "cli.execution.run-time-limit",
+   "source": "internal/proxy/cli.go#cliRun",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "cli-providers.cli-response-synthesis.001": {
+   "file": "specs/cli-providers/cli-response-synthesis/cli-provider-replies.feature",
+   "fingerprint": "c26ea91b97b4",
+   "human": false,
+   "rule": "cli.replies.shape-follows-stream-flag",
+   "source": "internal/proxy/cli.go#cliUpstream",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestRunCLIEndToEnd",
+   "tests": [
+    "internal/proxy/cli_test.go#TestRunCLIEndToEnd"
+   ]
+  },
+  "cli-providers.cli-response-synthesis.002": {
+   "file": "specs/cli-providers/cli-response-synthesis/cli-provider-replies.feature",
+   "fingerprint": "00881026003f",
+   "human": false,
+   "rule": "cli.replies.answer-from-json-path",
+   "source": "internal/proxy/cli.go#extractCompletion",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestDotGetAndExtract",
+   "tests": [
+    "internal/proxy/cli_test.go#TestDotGetAndExtract"
+   ]
+  },
+  "cli-providers.cli-response-synthesis.003": {
+   "file": "specs/cli-providers/cli-response-synthesis/cli-provider-replies.feature",
+   "fingerprint": "3d029a60cf09",
+   "human": false,
+   "rule": "cli.replies.token-usage-reported-or-estimated",
+   "source": "internal/proxy/cli.go#runCLI",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestDotGetAndExtract",
+   "tests": [
+    "internal/proxy/cli_test.go#TestDotGetAndExtract",
+    "internal/proxy/cli_test.go#TestRunCLIEndToEnd"
+   ]
+  },
+  "cli-providers.cli-response-synthesis.004": {
+   "file": "specs/cli-providers/cli-response-synthesis/cli-reply-synthesis.feature",
+   "fingerprint": "14b4dc67974a",
+   "human": false,
+   "rule": "cli-providers.response-synthesis.non-streamed-reply-is-chat-completion",
+   "source": "internal/proxy/clisynth.go#synthJSON",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestRunCLIEndToEnd",
+   "tests": [
+    "internal/proxy/cli_test.go#TestRunCLIEndToEnd"
+   ]
+  },
+  "cli-providers.cli-response-synthesis.005": {
+   "file": "specs/cli-providers/cli-response-synthesis/cli-reply-synthesis.feature",
+   "fingerprint": "a4a498f7e7ed",
+   "human": false,
+   "rule": "cli-providers.response-synthesis.streamed-reply-is-openai-sse",
+   "source": "internal/proxy/clisynth.go#synthSSE",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestSynthSSEParsesAsOpenAI",
+   "tests": [
+    "internal/proxy/cli_test.go#TestSynthSSEParsesAsOpenAI",
+    "internal/proxy/cli_test.go#TestRunCLIEndToEnd"
+   ]
+  },
+  "cli-providers.cli-response-synthesis.006": {
+   "file": "specs/cli-providers/cli-response-synthesis/cli-reply-synthesis.feature",
+   "fingerprint": "1e67b328136e",
+   "human": false,
+   "rule": "cli-providers.response-synthesis.usage-totals-prompt-plus-completion",
+   "source": "internal/proxy/clisynth.go#synthUsage",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestSynthSSEParsesAsOpenAI",
+   "tests": [
+    "internal/proxy/cli_test.go#TestSynthSSEParsesAsOpenAI"
+   ]
+  },
+  "cli-providers.cli-response-synthesis.007": {
+   "file": "specs/cli-providers/cli-response-synthesis/cli-reply-synthesis.feature",
+   "fingerprint": "526a5b2bd67e",
+   "human": false,
+   "rule": "cli-providers.response-synthesis.reply-identifies-chicco-and-model",
+   "source": "internal/proxy/clisynth.go#synthID",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestSynthSSEParsesAsOpenAI",
+   "tests": [
+    "internal/proxy/cli_test.go#TestSynthSSEParsesAsOpenAI"
+   ]
+  },
+  "configuration.config-file.001": {
+   "file": "specs/configuration/config-file/config-file-shape.feature",
+   "fingerprint": "491b086f845e",
+   "human": false,
+   "rule": "config.providers.list-or-keyed-map",
+   "source": "internal/proxy/config.go#decodeProviders",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.002": {
+   "file": "specs/configuration/config-file/config-file-shape.feature",
+   "fingerprint": "69e54c22a1d6",
+   "human": false,
+   "rule": "config.providers.map-key-is-default-name",
+   "source": "internal/proxy/config.go#decodeProviderMap",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.003": {
+   "file": "specs/configuration/config-file/config-file-shape.feature",
+   "fingerprint": "491b086f845e",
+   "human": false,
+   "rule": "config.providers.reject-non-list-non-map",
+   "source": "internal/proxy/config.go#decodeProviders",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.004": {
+   "file": "specs/configuration/config-file/config-file-shape.feature",
+   "fingerprint": "5147879087a8",
+   "human": false,
+   "rule": "config.listen.default-loopback",
+   "source": "internal/proxy/configload.go#LoadConfig",
+   "status": "verified",
+   "test": "internal/proxy/bind_test.go#TestDefaultAddrIsLoopback",
+   "tests": [
+    "internal/proxy/bind_test.go#TestDefaultAddrIsLoopback"
+   ]
+  },
+  "configuration.config-file.005": {
+   "file": "specs/configuration/config-file/config-file-shape.feature",
+   "fingerprint": "4e68a77d443b",
+   "human": false,
+   "rule": "config.quota.tracked-window-priority",
+   "source": "internal/proxy/config.go#quotaBar",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.006": {
+   "file": "specs/configuration/config-file/loading-config-file.feature",
+   "fingerprint": "5147879087a8",
+   "human": false,
+   "rule": "configuration.config-file.default-listen-address-is-loopback",
+   "source": "internal/proxy/configload.go#LoadConfig",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.007": {
+   "file": "specs/configuration/config-file/loading-config-file.feature",
+   "fingerprint": "5147879087a8",
+   "human": false,
+   "rule": "configuration.config-file.secrets-and-commands-read-from-environment",
+   "source": "internal/proxy/configload.go#LoadConfig",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.008": {
+   "file": "specs/configuration/config-file/loading-config-file.feature",
+   "fingerprint": "5147879087a8",
+   "human": false,
+   "rule": "configuration.config-file.unset-variable-becomes-empty",
+   "source": "internal/proxy/configload.go#LoadConfig",
+   "status": "verified",
+   "test": "cmd/chicco/main_test.go#TestStrictCheckFailsOnAnInactiveProvider",
+   "tests": [
+    "cmd/chicco/main_test.go#TestStrictCheckFailsOnAnInactiveProvider",
+    "cmd/chicco/main_test.go#TestCheckAcceptsAnInactiveProvider"
+   ]
+  },
+  "configuration.config-file.009": {
+   "file": "specs/configuration/config-file/loading-config-file.feature",
+   "fingerprint": "5147879087a8",
+   "human": false,
+   "rule": "configuration.config-file.cli-placeholders-survive-expansion",
+   "source": "internal/proxy/configload.go#LoadConfig",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.010": {
+   "file": "specs/configuration/config-file/loading-config-file.feature",
+   "fingerprint": "5147879087a8",
+   "human": false,
+   "rule": "configuration.config-file.unreadable-or-malformed-file-refuses-start",
+   "source": "internal/proxy/configload.go#LoadConfig",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.011": {
+   "file": "specs/configuration/config-file/loading-config-file.feature",
+   "fingerprint": "8e190775a123",
+   "human": false,
+   "rule": "configuration.config-file.provider-models-inferred-from-virtual-models",
+   "source": "internal/proxy/configload.go#resolveModels",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-file.012": {
+   "file": "specs/configuration/config-file/loading-config-file.feature",
+   "fingerprint": "8e190775a123",
+   "human": false,
+   "rule": "configuration.config-file.inline-models-extended-by-backends",
+   "source": "internal/proxy/configload.go#resolveModels",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-validation.001": {
+   "file": "specs/configuration/config-validation/config-check.feature",
+   "fingerprint": "ea01f42aa64b",
+   "human": false,
+   "rule": "configuration.check.sound-config-passes",
+   "source": "internal/proxy/validate.go#Validate",
+   "status": "verified",
+   "test": "internal/proxy/config_test.go#TestValidateCleanConfig",
+   "tests": [
+    "internal/proxy/config_test.go#TestValidateCleanConfig",
+    "cmd/chicco/main_test.go#TestStrictCheckPassesAValidConfig"
+   ]
+  },
+  "configuration.config-validation.002": {
+   "file": "specs/configuration/config-validation/config-check.feature",
+   "fingerprint": "3986f86b7a80",
+   "human": false,
+   "rule": "configuration.check.hard-errors-fail",
+   "source": "internal/proxy/validate.go#validateProvider",
+   "status": "verified",
+   "test": "internal/proxy/config_test.go#TestValidateCatchesMistakes",
+   "tests": [
+    "internal/proxy/config_test.go#TestValidateCatchesMistakes",
+    "internal/proxy/config_test.go#TestValidateModelStrategy",
+    "internal/proxy/config_test.go#TestValidateBackendWeight"
+   ]
+  },
+  "configuration.config-validation.003": {
+   "file": "specs/configuration/config-validation/config-check.feature",
+   "fingerprint": "21bd25b7bb20",
+   "human": false,
+   "rule": "configuration.check.inactive-provider-warns",
+   "source": "internal/proxy/validate.go#validateProviders",
+   "status": "verified",
+   "test": "cmd/chicco/main_test.go#TestCheckAcceptsAnInactiveProvider",
+   "tests": [
+    "cmd/chicco/main_test.go#TestCheckAcceptsAnInactiveProvider",
+    "cmd/chicco/main_test.go#TestStrictCheckFailsOnAnInactiveProvider",
+    "internal/proxy/config_test.go#TestValidateWarnsInactive"
+   ]
+  },
+  "configuration.config-validation.004": {
+   "file": "specs/configuration/config-validation/config-check.feature",
+   "fingerprint": "21bd25b7bb20",
+   "human": false,
+   "rule": "configuration.check.no-active-providers-warns",
+   "source": "internal/proxy/validate.go#validateProviders",
+   "status": "verified",
+   "test": "internal/proxy/config_test.go#TestValidateWarnsInactive",
+   "tests": [
+    "internal/proxy/config_test.go#TestValidateWarnsInactive"
+   ]
+  },
+  "configuration.config-validation.005": {
+   "file": "specs/configuration/config-validation/config-check.feature",
+   "fingerprint": "ea01f42aa64b",
+   "human": false,
+   "rule": "configuration.check.no-providers-fails",
+   "source": "internal/proxy/validate.go#Validate",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.config-validation.006": {
+   "file": "specs/configuration/config-validation/config-check.feature",
+   "fingerprint": "005b1d380b61",
+   "human": false,
+   "rule": "configuration.aliases.must-target-a-model",
+   "source": "internal/proxy/validate.go#validateAliases",
+   "status": "verified",
+   "test": "internal/proxy/alias_test.go#TestAliasPointingAtNothingIsRefusedAtLoad",
+   "tests": [
+    "internal/proxy/alias_test.go#TestAliasPointingAtNothingIsRefusedAtLoad",
+    "internal/proxy/alias_test.go#TestAliasWithAnEmptyTargetIsRefused",
+    "internal/proxy/alias_test.go#TestAliasCannotShadowAModelID",
+    "internal/proxy/alias_test.go#TestNoAliasesIsNotAnError"
+   ]
+  },
+  "configuration.hot-reload.001": {
+   "file": "specs/configuration/hot-reload/config-hot-reload.feature",
+   "fingerprint": "02e6f1eb879c",
+   "human": false,
+   "rule": "config.hot-reload.applies-edits-on-signal",
+   "source": "internal/proxy/reload.go#reloadFromFile",
+   "status": "verified",
+   "test": "internal/proxy/reload_test.go#TestReloadPreservesLiveState",
+   "tests": [
+    "internal/proxy/reload_test.go#TestReloadPreservesLiveState",
+    "internal/proxy/alias_test.go#TestReloadPicksUpAliasChanges"
+   ]
+  },
+  "configuration.hot-reload.002": {
+   "file": "specs/configuration/hot-reload/config-hot-reload.feature",
+   "fingerprint": "02e6f1eb879c",
+   "human": false,
+   "rule": "config.hot-reload.bad-edit-keeps-running-config",
+   "source": "internal/proxy/reload.go#reloadFromFile",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.hot-reload.003": {
+   "file": "specs/configuration/hot-reload/config-hot-reload.feature",
+   "fingerprint": "02e6f1eb879c",
+   "human": false,
+   "rule": "config.hot-reload.open-bind-auth-not-rechecked",
+   "source": "internal/proxy/reload.go#reloadFromFile",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.hot-reload.004": {
+   "file": "specs/configuration/hot-reload/config-hot-reload.feature",
+   "fingerprint": "2e7596c808fb",
+   "human": false,
+   "rule": "config.hot-reload.unavailable-on-windows",
+   "source": "internal/proxy/reload_windows.go#watchSIGHUP",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.hot-reload.005": {
+   "file": "specs/configuration/hot-reload/reload-on-sighup.feature",
+   "fingerprint": "2ead30a45aa8",
+   "human": false,
+   "rule": "configuration.hot-reload.sighup-applies-edits",
+   "source": "internal/proxy/reload_unix.go#watchSIGHUP",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.hot-reload.006": {
+   "file": "specs/configuration/hot-reload/reload-on-sighup.feature",
+   "fingerprint": "02e6f1eb879c",
+   "human": false,
+   "rule": "configuration.hot-reload.bad-edit-keeps-running-config",
+   "source": "internal/proxy/reload.go#reloadFromFile",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "configuration.hot-reload.007": {
+   "file": "specs/configuration/hot-reload/config-reload-windows.feature",
+   "fingerprint": "2e7596c808fb",
+   "human": false,
+   "rule": "configuration.hot-reload.windows-needs-restart",
+   "source": "internal/proxy/reload_windows.go#watchSIGHUP",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.live-logs.001": {
+   "file": "specs/dashboard/live-logs/live-log-history.feature",
+   "fingerprint": "9521d0587f99",
+   "human": false,
+   "rule": "dashboard.live-logs.status-returns-recent-lines",
+   "source": "internal/proxy/proxy.go#handleStatus",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.live-logs.002": {
+   "file": "specs/dashboard/live-logs/live-log-history.feature",
+   "fingerprint": "754112dafb26",
+   "human": false,
+   "rule": "dashboard.live-logs.history-capped-at-500",
+   "source": "internal/proxy/run.go#Run",
+   "status": "verified",
+   "test": "internal/proxy/ui_test.go#TestLogBufferRingAndSplit",
+   "tests": [
+    "internal/proxy/ui_test.go#TestLogBufferRingAndSplit"
+   ]
+  },
+  "dashboard.live-logs.003": {
+   "file": "specs/dashboard/live-logs/live-log-history.feature",
+   "fingerprint": "4cc97868f2ed",
+   "human": false,
+   "rule": "dashboard.live-logs.captured-when-headless",
+   "source": "internal/proxy/run.go#serveHeadless",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.provider-view.001": {
+   "file": "specs/dashboard/provider-view/terminal-provider-rows.feature",
+   "fingerprint": "f35dfd81f9cf",
+   "human": false,
+   "rule": "dashboard.provider-view.status-shows-why-provider-cannot-serve",
+   "source": "internal/proxy/uiprovider.go#providerStatus",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.provider-view.002": {
+   "file": "specs/dashboard/provider-view/terminal-provider-rows.feature",
+   "fingerprint": "34b680b6585c",
+   "human": false,
+   "rule": "dashboard.provider-view.usage-against-governing-quota",
+   "source": "internal/proxy/uiprovider.go#usageBar",
+   "status": "verified",
+   "test": "internal/proxy/ui_test.go#TestProviderRowsQuotaCells",
+   "tests": [
+    "internal/proxy/ui_test.go#TestProviderRowsQuotaCells"
+   ]
+  },
+  "dashboard.provider-view.003": {
+   "file": "specs/dashboard/provider-view/terminal-provider-rows.feature",
+   "fingerprint": "23360ec552e5",
+   "human": false,
+   "rule": "dashboard.provider-view.one-row-per-model",
+   "source": "internal/proxy/uiprovider.go#providerRows",
+   "status": "verified",
+   "test": "internal/proxy/ui_test.go#TestProviderRowsQuotaCells",
+   "tests": [
+    "internal/proxy/ui_test.go#TestProviderRowsQuotaCells"
+   ]
+  },
+  "dashboard.provider-view.004": {
+   "file": "specs/dashboard/provider-view/terminal-provider-rows.feature",
+   "fingerprint": "d1aa56d00451",
+   "human": false,
+   "rule": "dashboard.provider-view.model-own-quota",
+   "source": "internal/proxy/uiprovider.go#modelCells",
+   "status": "verified",
+   "test": "internal/proxy/ui_test.go#TestProviderRowsQuotaCells",
+   "tests": [
+    "internal/proxy/ui_test.go#TestProviderRowsQuotaCells"
+   ]
+  },
+  "dashboard.provider-view.005": {
+   "file": "specs/dashboard/provider-view/terminal-provider-rows.feature",
+   "fingerprint": "d1aa56d00451",
+   "human": false,
+   "rule": "dashboard.provider-view.model-falls-back-to-provider-quota",
+   "source": "internal/proxy/uiprovider.go#modelCells",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.terminal-dashboard.001": {
+   "file": "specs/dashboard/terminal-dashboard/terminal-dashboard-controls.feature",
+   "fingerprint": "96d532f67410",
+   "human": false,
+   "rule": "dashboard.terminal.refresh-every-second",
+   "source": "internal/proxy/ui.go#tick",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.terminal-dashboard.002": {
+   "file": "specs/dashboard/terminal-dashboard/terminal-dashboard-display.feature",
+   "fingerprint": "0f0c65065147",
+   "human": false,
+   "rule": "dashboard.terminal.usage-bar-colour-by-quota-share",
+   "source": "internal/proxy/uirender.go#renderBar",
+   "status": "verified",
+   "test": "internal/proxy/ui_test.go#TestRenderBarColorAndFill",
+   "tests": [
+    "internal/proxy/ui_test.go#TestRenderBarColorAndFill"
+   ]
+  },
+  "dashboard.terminal-dashboard.003": {
+   "file": "specs/dashboard/terminal-dashboard/terminal-dashboard-display.feature",
+   "fingerprint": "a8360ecf21cc",
+   "human": false,
+   "rule": "dashboard.terminal.limit-reset-time-format",
+   "source": "internal/proxy/uirender.go#fmtReset",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.terminal-dashboard.004": {
+   "file": "specs/dashboard/terminal-dashboard/terminal-dashboard-display.feature",
+   "fingerprint": "82a4189a24fe",
+   "human": false,
+   "rule": "dashboard.terminal.failure-log-lines-highlighted",
+   "source": "internal/proxy/uirender.go#isErrorLine",
+   "status": "verified",
+   "test": "internal/proxy/ui_test.go#TestIsErrorLine",
+   "tests": [
+    "internal/proxy/ui_test.go#TestIsErrorLine"
+   ]
+  },
+  "dashboard.terminal-dashboard.005": {
+   "file": "specs/dashboard/terminal-dashboard/terminal-dashboard-display.feature",
+   "fingerprint": "b38f0fc8d5b9",
+   "human": false,
+   "rule": "dashboard.terminal.legend-explains-status-and-keys",
+   "source": "internal/proxy/uirender.go#legendLine",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "dashboard.web-dashboard.001": {
+   "file": "specs/dashboard/web-dashboard/web-dashboard-page.feature",
+   "fingerprint": "1c4401e8e9fc",
+   "human": false,
+   "rule": "dashboard.web.page-served-self-contained",
+   "source": "internal/proxy/web.go#handleDashboard",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestInboundAuth",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestInboundAuth"
+   ]
+  },
+  "dashboard.web-dashboard.002": {
+   "file": "specs/dashboard/web-dashboard/web-dashboard-page.feature",
+   "fingerprint": "1c4401e8e9fc",
+   "human": false,
+   "rule": "dashboard.web.only-get-allowed",
+   "source": "internal/proxy/web.go#handleDashboard",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.container-and-kubernetes.001": {
+   "file": "specs/operations/container-and-kubernetes/chicco-container-image.feature",
+   "fingerprint": "71902338966c",
+   "human": false,
+   "rule": "operations.container.config-and-keys-mounted-not-baked",
+   "source": "Dockerfile#CMD",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.container-and-kubernetes.002": {
+   "file": "specs/operations/container-and-kubernetes/chicco-container-image.feature",
+   "fingerprint": "71902338966c",
+   "human": false,
+   "rule": "operations.container.args-replace-default-flags",
+   "source": "Dockerfile#CMD",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.container-and-kubernetes.003": {
+   "file": "specs/operations/container-and-kubernetes/chicco-container-image.feature",
+   "fingerprint": "a38a61813cfe",
+   "human": false,
+   "rule": "operations.container.runs-unprivileged",
+   "source": "Dockerfile#USER",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.container-and-kubernetes.004": {
+   "file": "specs/operations/container-and-kubernetes/chicco-container-image.feature",
+   "fingerprint": "fcc2a9bbed4c",
+   "human": false,
+   "rule": "operations.container.health-from-health-endpoint",
+   "source": "Dockerfile#HEALTHCHECK",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.installation.001": {
+   "file": "specs/operations/installation/install-script.feature",
+   "fingerprint": "72f712da0ece",
+   "human": false,
+   "rule": "operations.install.platform-archive-selection",
+   "source": "install.sh#archive",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.installation.002": {
+   "file": "specs/operations/installation/install-script.feature",
+   "fingerprint": "e704334f7fc7",
+   "human": false,
+   "rule": "operations.install.unsupported-platform-refused",
+   "source": "install.sh#err",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.installation.003": {
+   "file": "specs/operations/installation/install-script.feature",
+   "fingerprint": "719b7d4d77c2",
+   "human": false,
+   "rule": "operations.install.checksum-verified-before-install",
+   "source": "install.sh#want",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.installation.004": {
+   "file": "specs/operations/installation/install-script.feature",
+   "fingerprint": "40d221620166",
+   "human": false,
+   "rule": "operations.install.prerequisite-tools-required",
+   "source": "install.sh#have",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.installation.005": {
+   "file": "specs/operations/installation/install-script.feature",
+   "fingerprint": "17e2d41d505c",
+   "human": false,
+   "rule": "operations.install.version-selection",
+   "source": "install.sh#version",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.installation.006": {
+   "file": "specs/operations/installation/install-script.feature",
+   "fingerprint": "5ec062166c5f",
+   "human": false,
+   "rule": "operations.install.install-directory",
+   "source": "install.sh#bindir",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.installation.007": {
+   "file": "specs/operations/installation/install-script.feature",
+   "fingerprint": "5ec062166c5f",
+   "human": false,
+   "rule": "operations.install.path-hint",
+   "source": "install.sh#bindir",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.001": {
+   "file": "specs/operations/startup/chicco-command-line.feature",
+   "fingerprint": "9b6175a58ffb",
+   "human": false,
+   "rule": "operations.cli.config-check-reports-validity",
+   "source": "cmd/chicco/main.go#checkConfig",
+   "status": "verified",
+   "test": "cmd/chicco/main_test.go#TestCheckAcceptsAnInactiveProvider",
+   "tests": [
+    "cmd/chicco/main_test.go#TestCheckAcceptsAnInactiveProvider"
+   ]
+  },
+  "operations.startup.002": {
+   "file": "specs/operations/startup/chicco-command-line.feature",
+   "fingerprint": "9b6175a58ffb",
+   "human": false,
+   "rule": "operations.cli.strict-check-fails-on-warnings",
+   "source": "cmd/chicco/main.go#checkConfig",
+   "status": "verified",
+   "test": "cmd/chicco/main_test.go#TestStrictCheckFailsOnAnInactiveProvider",
+   "tests": [
+    "cmd/chicco/main_test.go#TestStrictCheckFailsOnAnInactiveProvider",
+    "cmd/chicco/main_test.go#TestStrictCheckPassesAValidConfig"
+   ]
+  },
+  "operations.startup.003": {
+   "file": "specs/operations/startup/chicco-command-line.feature",
+   "fingerprint": "f49bd59deb1f",
+   "human": false,
+   "rule": "operations.cli.version-prints-build",
+   "source": "cmd/chicco/main.go#main",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.004": {
+   "file": "specs/operations/startup/chicco-command-line.feature",
+   "fingerprint": "f49bd59deb1f",
+   "human": false,
+   "rule": "operations.cli.startup-failure-exits-nonzero",
+   "source": "cmd/chicco/main.go#main",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.005": {
+   "file": "specs/operations/startup/chicco-command-line.feature",
+   "fingerprint": "911d97d3a240",
+   "human": false,
+   "rule": "operations.cli.help-shows-usage",
+   "source": "cmd/chicco/main.go#usage",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.006": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "438d2210f664",
+   "human": false,
+   "rule": "operations.startup.no-open-listener-on-routable-address",
+   "source": "internal/proxy/run.go#RequireAuthOnBind",
+   "status": "verified",
+   "test": "internal/proxy/bind_test.go#TestRequireAuthOnBind",
+   "tests": [
+    "internal/proxy/bind_test.go#TestRequireAuthOnBind"
+   ]
+  },
+  "operations.startup.007": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "31a18f4e1ace",
+   "human": false,
+   "rule": "operations.startup.default-address-is-loopback",
+   "source": "internal/proxy/run.go#isLoopback",
+   "status": "verified",
+   "test": "internal/proxy/bind_test.go#TestDefaultAddrIsLoopback",
+   "tests": [
+    "internal/proxy/bind_test.go#TestDefaultAddrIsLoopback",
+    "internal/proxy/bind_test.go#TestRequireAuthOnBind"
+   ]
+  },
+  "operations.startup.008": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "754112dafb26",
+   "human": false,
+   "rule": "operations.startup.addr-flag-overrides-config",
+   "source": "internal/proxy/run.go#Run",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.009": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "754112dafb26",
+   "human": false,
+   "rule": "operations.startup.refuse-without-usable-providers",
+   "source": "internal/proxy/run.go#Run",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.010": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "899f3146334b",
+   "human": false,
+   "rule": "operations.startup.log-states-auth-posture",
+   "source": "internal/proxy/run.go#authState",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.011": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "4cc97868f2ed",
+   "human": false,
+   "rule": "operations.startup.headless-when-no-terminal",
+   "source": "internal/proxy/run.go#serveHeadless",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.012": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "538daae2f22f",
+   "human": false,
+   "rule": "operations.startup.unwritable-state-warned-once",
+   "source": "internal/proxy/run.go#persistLoop",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "operations.startup.013": {
+   "file": "specs/operations/startup/starting-the-proxy.feature",
+   "fingerprint": "f69fd1bd568e",
+   "human": false,
+   "rule": "operations.startup.dashboard-listen-failure-not-fatal",
+   "source": "internal/proxy/run.go#serveDashboard",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.health-endpoint.001": {
+   "file": "specs/provider-health/health-endpoint/proxy-health-and-status.feature",
+   "fingerprint": "4d8e9536fe17",
+   "human": false,
+   "rule": "provider-health.health.always-200-with-provider-states",
+   "source": "internal/proxy/proxy.go#handleHealth",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestHealthBody",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestHealthBody"
+   ]
+  },
+  "provider-health.health-endpoint.002": {
+   "file": "specs/provider-health/health-endpoint/proxy-health-and-status.feature",
+   "fingerprint": "4d8e9536fe17",
+   "human": false,
+   "rule": "provider-health.health.unconfigured-providers-omitted",
+   "source": "internal/proxy/proxy.go#handleHealth",
+   "status": "gap",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.health-probes.001": {
+   "file": "specs/provider-health/health-probes/provider-health-probes.feature",
+   "fingerprint": "3e2752b461d3",
+   "human": false,
+   "rule": "provider-health.probes.http-reply-sets-state",
+   "source": "internal/proxy/health.go#probeProvider",
+   "status": "verified",
+   "test": "internal/proxy/health_test.go#TestProbeProvider",
+   "tests": [
+    "internal/proxy/health_test.go#TestProbeProvider",
+    "internal/proxy/health_test.go#TestCheckHealthSetsSnapshot"
+   ]
+  },
+  "provider-health.health-probes.002": {
+   "file": "specs/provider-health/health-probes/provider-health-probes.feature",
+   "fingerprint": "2dc95edccc0f",
+   "human": false,
+   "rule": "provider-health.probes.cli-login-state",
+   "source": "internal/proxy/health.go#probeCLI",
+   "status": "verified",
+   "test": "internal/proxy/cli_test.go#TestProbeCLI",
+   "tests": [
+    "internal/proxy/cli_test.go#TestProbeCLI"
+   ]
+  },
+  "provider-health.model-testing.001": {
+   "file": "specs/provider-health/model-testing/model-testing.feature",
+   "fingerprint": "c24e4a5af4ca",
+   "human": false,
+   "rule": "provider-health.model-testing.probes-every-model-of-usable-providers",
+   "source": "internal/proxy/test.go#runTest",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.model-testing.002": {
+   "file": "specs/provider-health/model-testing/model-testing.feature",
+   "fingerprint": "7837735b0169",
+   "human": false,
+   "rule": "provider-health.model-testing.bypasses-cooldown",
+   "source": "internal/proxy/test.go#testOne",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.model-testing.003": {
+   "file": "specs/provider-health/model-testing/model-testing.feature",
+   "fingerprint": "c24e4a5af4ca",
+   "human": false,
+   "rule": "provider-health.model-testing.success-restores-health-and-counts-usage",
+   "source": "internal/proxy/test.go#runTest",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.model-testing.004": {
+   "file": "specs/provider-health/model-testing/model-testing.feature",
+   "fingerprint": "c24e4a5af4ca",
+   "human": false,
+   "rule": "provider-health.model-testing.failure-benches-provider-with-reason",
+   "source": "internal/proxy/test.go#runTest",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.model-testing.005": {
+   "file": "specs/provider-health/model-testing/model-testing.feature",
+   "fingerprint": "a7a8ce284da4",
+   "human": false,
+   "rule": "provider-health.model-testing.reports-quota-window",
+   "source": "internal/proxy/test.go#windowDesc",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.model-testing.006": {
+   "file": "specs/provider-health/model-testing/model-testing.feature",
+   "fingerprint": "c24e4a5af4ca",
+   "human": false,
+   "rule": "provider-health.model-testing.single-run-at-a-time",
+   "source": "internal/proxy/test.go#runTest",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "provider-health.model-testing.007": {
+   "file": "specs/provider-health/model-testing/model-testing.feature",
+   "fingerprint": "c24e4a5af4ca",
+   "human": false,
+   "rule": "provider-health.model-testing.nothing-to-test",
+   "source": "internal/proxy/test.go#runTest",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "routing.cooldowns-quotas.001": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits.feature",
+   "fingerprint": "f9c744d7297f",
+   "human": false,
+   "rule": "routing.rate-limits.limit-reached-benches-provider",
+   "source": "internal/proxy/ratelimit.go#check",
+   "status": "verified",
+   "test": "internal/proxy/window_test.go#TestRateLimitRPM",
+   "tests": [
+    "internal/proxy/window_test.go#TestRateLimitRPM",
+    "internal/proxy/window_test.go#TestRateLimitTPM"
+   ]
+  },
+  "routing.cooldowns-quotas.002": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits.feature",
+   "fingerprint": "f9c744d7297f",
+   "human": false,
+   "rule": "routing.rate-limits.under-limit-served",
+   "source": "internal/proxy/ratelimit.go#check",
+   "status": "verified",
+   "test": "internal/proxy/window_test.go#TestRateLimitNotTriggered",
+   "tests": [
+    "internal/proxy/window_test.go#TestRateLimitNotTriggered"
+   ]
+  },
+  "routing.cooldowns-quotas.003": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits.feature",
+   "fingerprint": "f9c744d7297f",
+   "human": false,
+   "rule": "routing.rate-limits.latest-reset-wins",
+   "source": "internal/proxy/ratelimit.go#check",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "routing.cooldowns-quotas.004": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits.feature",
+   "fingerprint": "20b10117ed69",
+   "human": false,
+   "rule": "usage.quota-window.usage-counted-per-window",
+   "source": "internal/proxy/ratelimit.go#windowTotals",
+   "status": "verified",
+   "test": "internal/proxy/window_test.go#TestEventLogDailyWindow",
+   "tests": [
+    "internal/proxy/window_test.go#TestEventLogDailyWindow",
+    "internal/proxy/window_test.go#TestEventLogNoneWindow"
+   ]
+  },
+  "routing.cooldowns-quotas.005": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits.feature",
+   "fingerprint": "269677abed6d",
+   "human": false,
+   "rule": "routing.rate-limits.limits-survive-restart",
+   "source": "internal/proxy/ratelimit.go#loadSlice",
+   "status": "verified",
+   "test": "internal/proxy/window_test.go#TestLoadSliceDropsOldEvents",
+   "tests": [
+    "internal/proxy/window_test.go#TestLoadSliceDropsOldEvents"
+   ]
+  },
+  "routing.cooldowns-quotas.006": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits.feature",
+   "fingerprint": "f10d46ea56bc",
+   "human": false,
+   "rule": "routing.rate-limits.history-capped",
+   "source": "internal/proxy/ratelimit.go#maxEvents",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "routing.cooldowns-quotas.007": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits-route.feature",
+   "fingerprint": "0a9a63b4e628",
+   "human": false,
+   "rule": "quotas.limits.provider-limit-benches-provider",
+   "source": "internal/proxy/route.go#tripQuota",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "routing.cooldowns-quotas.008": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits-route.feature",
+   "fingerprint": "45d199ef0aa3",
+   "human": false,
+   "rule": "quotas.limits.model-limit-benches-only-that-model",
+   "source": "internal/proxy/route.go#pick",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "routing.cooldowns-quotas.009": {
+   "file": "specs/routing/cooldowns-quotas/client-side-rate-limits-route.feature",
+   "fingerprint": "45d199ef0aa3",
+   "human": false,
+   "rule": "quotas.limits.global-cap-refuses-all",
+   "source": "internal/proxy/route.go#pick",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestGlobalQuotaCapsAcrossProviders",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestGlobalQuotaCapsAcrossProviders"
+   ]
+  },
+  "routing.error-classification.001": {
+   "file": "specs/routing/error-classification/upstream-failure-classification.feature",
+   "fingerprint": "5fa67ed8e295",
+   "human": false,
+   "rule": "routing.error-classification.rejected-key-benches-provider-for-an-hour",
+   "source": "internal/proxy/classify.go#classifyUpstream",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestClassifyUpstream",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestClassifyUpstream",
+    "internal/proxy/proxy_test.go#TestCooldown"
+   ]
+  },
+  "routing.error-classification.002": {
+   "file": "specs/routing/error-classification/upstream-failure-classification.feature",
+   "fingerprint": "5fa67ed8e295",
+   "human": false,
+   "rule": "routing.error-classification.exhausted-quota-is-a-limit-not-a-bad-key",
+   "source": "internal/proxy/classify.go#classifyUpstream",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestClassifyUpstream",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestClassifyUpstream"
+   ]
+  },
+  "routing.error-classification.003": {
+   "file": "specs/routing/error-classification/upstream-failure-classification.feature",
+   "fingerprint": "5fa67ed8e295",
+   "human": false,
+   "rule": "routing.error-classification.model-rejection-benches-only-that-model",
+   "source": "internal/proxy/classify.go#classifyUpstream",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestClassifyUpstream",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestClassifyUpstream",
+    "internal/proxy/proxy_test.go#TestModelScopedBlockKeepsSiblingsRoutable"
+   ]
+  },
+  "routing.error-classification.004": {
+   "file": "specs/routing/error-classification/upstream-failure-classification.feature",
+   "fingerprint": "0fab2be4c71c",
+   "human": false,
+   "rule": "routing.error-classification.rejected-request-benches-provider-briefly",
+   "source": "internal/proxy/classify.go#cooldown",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestCooldown",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestCooldown"
+   ]
+  },
+  "routing.error-classification.005": {
+   "file": "specs/routing/error-classification/upstream-failure-classification.feature",
+   "fingerprint": "0fab2be4c71c",
+   "human": false,
+   "rule": "routing.error-classification.transient-failure-honours-retry-after",
+   "source": "internal/proxy/classify.go#cooldown",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestCooldown",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestCooldown",
+    "internal/proxy/proxy_test.go#TestClassifyUpstream"
+   ]
+  },
+  "routing.provider-rotation.001": {
+   "file": "specs/routing/provider-rotation/provider-pool-eligibility.feature",
+   "fingerprint": "b42b9b37434a",
+   "human": false,
+   "rule": "routing.provider-pool.only-configured-providers-routable",
+   "source": "internal/proxy/rotator.go#Provider.isActive",
+   "status": "verified",
+   "test": "internal/proxy/proxy_test.go#TestActiveSkipsUnconfigured",
+   "tests": [
+    "internal/proxy/proxy_test.go#TestActiveSkipsUnconfigured"
+   ]
+  },
+  "routing.provider-rotation.002": {
+   "file": "specs/routing/provider-rotation/virtual-model-routing.feature",
+   "fingerprint": "e4b83faf88de",
+   "human": false,
+   "rule": "routing.virtual-models.only-listed-backends",
+   "source": "internal/proxy/route.go#activeForModel",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "routing.provider-rotation.003": {
+   "file": "specs/routing/provider-rotation/virtual-model-routing.feature",
+   "fingerprint": "e4b83faf88de",
+   "human": false,
+   "rule": "routing.virtual-models.unmatched-model-uses-whole-pool",
+   "source": "internal/proxy/route.go#activeForModel",
+   "status": "verified",
+   "test": "internal/proxy/alias_test.go#TestUnknownModelStillFallsBackRatherThanFailing",
+   "tests": [
+    "internal/proxy/alias_test.go#TestUnknownModelStillFallsBackRatherThanFailing",
+    "internal/proxy/strategy_test.go#TestStrategyPerModel"
+   ]
+  },
+  "routing.provider-rotation.004": {
+   "file": "specs/routing/provider-rotation/virtual-model-routing.feature",
+   "fingerprint": "41f0ef7180e8",
+   "human": false,
+   "rule": "routing.virtual-models.strategy-sets-preference",
+   "source": "internal/proxy/route.go#order",
+   "status": "verified",
+   "test": "internal/proxy/strategy_test.go#TestStrategyDefaultIsConfigOrder",
+   "tests": [
+    "internal/proxy/strategy_test.go#TestStrategyDefaultIsConfigOrder",
+    "internal/proxy/strategy_test.go#TestStrategyRoundRobin",
+    "internal/proxy/strategy_test.go#TestStrategyRandomIsPermutation",
+    "internal/proxy/strategy_test.go#TestStrategyWeighted",
+    "internal/proxy/strategy_test.go#TestStrategyPerModel"
+   ]
+  },
+  "routing.provider-rotation.005": {
+   "file": "specs/routing/provider-rotation/virtual-model-routing.feature",
+   "fingerprint": "e4b83faf88de",
+   "human": false,
+   "rule": "routing.virtual-models.backend-weight-override",
+   "source": "internal/proxy/route.go#activeForModel",
+   "status": "verified",
+   "test": "internal/proxy/strategy_test.go#TestBackendWeightOverride",
+   "tests": [
+    "internal/proxy/strategy_test.go#TestBackendWeightOverride"
+   ]
+  },
+  "routing.provider-rotation.006": {
+   "file": "specs/routing/provider-rotation/virtual-model-routing.feature",
+   "fingerprint": "45d199ef0aa3",
+   "human": false,
+   "rule": "routing.virtual-models.rotate-models-within-provider",
+   "source": "internal/proxy/route.go#pick",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "usage-and-cost.quota-alerts.001": {
+   "file": "specs/usage-and-cost/quota-alerts/budget-alerts.feature",
+   "fingerprint": "79f8e87bf358",
+   "human": false,
+   "rule": "usage.quota-alerts.rearm-when-window-rolls",
+   "source": "internal/proxy/alert.go#windowStart",
+   "status": "verified",
+   "test": "internal/proxy/alert_test.go#TestResetsWhenTheWindowRollsOver",
+   "tests": [
+    "internal/proxy/alert_test.go#TestResetsWhenTheWindowRollsOver",
+    "internal/proxy/alert_test.go#TestHourlyAndMinutelyWindowsReArmOnTheirOwnBoundary",
+    "internal/proxy/alert_test.go#TestAQuotaThatNeverResetsAlertsOnce"
+   ]
+  },
+  "usage-and-cost.quota-alerts.002": {
+   "file": "specs/usage-and-cost/quota-alerts/budget-alerts.feature",
+   "fingerprint": "a7edc11259b4",
+   "human": false,
+   "rule": "usage.quota-alerts.webhook-payload-has-no-request-content",
+   "source": "internal/proxy/alert.go#Alert",
+   "status": "verified",
+   "test": "internal/proxy/alert_test.go#TestWebhookPayloadCarriesNoRequestContent",
+   "tests": [
+    "internal/proxy/alert_test.go#TestWebhookPayloadCarriesNoRequestContent"
+   ]
+  },
+  "usage-and-cost.quota-alerts.003": {
+   "file": "specs/usage-and-cost/quota-alerts/budget-alerts.feature",
+   "fingerprint": "4e68a77d443b",
+   "human": false,
+   "rule": "usage.quota-alerts.watches-largest-window-only",
+   "source": "internal/proxy/config.go#quotaBar",
+   "status": "verified",
+   "test": "internal/proxy/alert_test.go#TestCheckBudgetsReadsTheProvidersOwnWindow",
+   "tests": [
+    "internal/proxy/alert_test.go#TestCheckBudgetsReadsTheProvidersOwnWindow"
+   ]
+  },
+  "usage-and-cost.spend-tracking.001": {
+   "file": "specs/usage-and-cost/spend-tracking/session-spend.feature",
+   "fingerprint": "a8d00ca5b072",
+   "human": false,
+   "rule": "usage.spend.currency-labelled-not-assumed",
+   "source": "internal/proxy/cost.go#newCostTracker",
+   "status": "verified",
+   "test": "internal/proxy/cost_test.go#TestCurrencyIsLabelledNotAssumed",
+   "tests": [
+    "internal/proxy/cost_test.go#TestCurrencyIsLabelledNotAssumed"
+   ]
+  },
+  "usage-and-cost.usage-persistence.001": {
+   "file": "specs/usage-and-cost/usage-persistence/usage-survives-restart.feature",
+   "fingerprint": "5923ae912c59",
+   "human": false,
+   "rule": "usage.persistence.counters-survive-restart",
+   "source": "internal/proxy/state.go#EnablePersistence",
+   "status": "verified",
+   "test": "internal/proxy/state_test.go#TestPersistenceRoundTrip",
+   "tests": [
+    "internal/proxy/state_test.go#TestPersistenceRoundTrip"
+   ]
+  },
+  "usage-and-cost.usage-persistence.002": {
+   "file": "specs/usage-and-cost/usage-persistence/usage-survives-restart.feature",
+   "fingerprint": "5923ae912c59",
+   "human": false,
+   "rule": "usage.persistence.active-cooldown-survives-restart",
+   "source": "internal/proxy/state.go#EnablePersistence",
+   "status": "verified",
+   "test": "internal/proxy/state_test.go#TestLimitBlockPersists",
+   "tests": [
+    "internal/proxy/state_test.go#TestLimitBlockPersists"
+   ]
+  },
+  "usage-and-cost.usage-persistence.003": {
+   "file": "specs/usage-and-cost/usage-persistence/usage-survives-restart.feature",
+   "fingerprint": "5923ae912c59",
+   "human": false,
+   "rule": "usage.persistence.expired-cooldown-not-restored",
+   "source": "internal/proxy/state.go#EnablePersistence",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "usage-and-cost.usage-persistence.004": {
+   "file": "specs/usage-and-cost/usage-persistence/usage-survives-restart.feature",
+   "fingerprint": "5923ae912c59",
+   "human": false,
+   "rule": "usage.persistence.old-usage-dropped-on-load",
+   "source": "internal/proxy/state.go#EnablePersistence",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "usage-and-cost.usage-persistence.005": {
+   "file": "specs/usage-and-cost/usage-persistence/usage-survives-restart.feature",
+   "fingerprint": "5923ae912c59",
+   "human": false,
+   "rule": "usage.persistence.unreadable-state-starts-empty",
+   "source": "internal/proxy/state.go#EnablePersistence",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "usage-and-cost.usage-persistence.006": {
+   "file": "specs/usage-and-cost/usage-persistence/usage-survives-restart.feature",
+   "fingerprint": "5923ae912c59",
+   "human": false,
+   "rule": "usage.persistence.removed-provider-usage-dropped",
+   "source": "internal/proxy/state.go#EnablePersistence",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  },
+  "usage-and-cost.usage-persistence.007": {
+   "file": "specs/usage-and-cost/usage-persistence/usage-survives-restart.feature",
+   "fingerprint": "9a5611b2069e",
+   "human": false,
+   "rule": "usage.persistence.state-file-owner-only",
+   "source": "internal/proxy/state.go#Persist",
+   "status": "inferred",
+   "test": "",
+   "tests": []
+  }
+ },
+ "taxonomy": {
+  "domains": [
+   {
+    "areas": [
+     {
+      "description": "Forwarding OpenAI-style /v1/chat/completions and /v1/embeddings requests to a provider and relaying the reply.",
+      "slug": "chat-completions",
+      "title": "Chat completions"
+     },
+     {
+      "description": "Serving the Anthropic /v1/messages endpoint, including translating requests and JSON replies between the Anthropic and OpenAI schemas.",
+      "slug": "anthropic-messages",
+      "title": "Anthropic messages"
+     },
+     {
+      "description": "Relaying and translating server-sent event streams so callers get the same stream framing whichever provider answers.",
+      "slug": "streaming",
+      "title": "Streaming responses"
+     },
+     {
+      "description": "Listing the virtual and real models a caller can request through /v1/models.",
+      "slug": "model-catalog",
+      "title": "Model catalog"
+     },
+     {
+      "description": "Checking the proxy's own API key on API calls and the dashboard, while provider keys pass through untouched.",
+      "slug": "access-control",
+      "title": "Access control"
+     }
+    ],
+    "description": "The OpenAI- and Anthropic-compatible endpoints that callers talk to, and how requests and responses keep their wire format.",
+    "slug": "api-gateway",
+    "title": "API Gateway"
+   },
+   {
+    "areas": [
+     {
+      "description": "Rotating requests across the provider pool and resolving virtual model aliases to concrete providers.",
+      "slug": "provider-rotation",
+      "title": "Provider rotation"
+     },
+     {
+      "description": "Retrying a failed request on the next provider while keeping the caller's status codes and stream unchanged.",
+      "slug": "failover",
+      "title": "Failover"
+     },
+     {
+      "description": "Sorting upstream failures into retryable, quota-exhausted or fatal so the router knows what to do next.",
+      "slug": "error-classification",
+      "title": "Error classification"
+     },
+     {
+      "description": "Tracking token usage and rate-limit windows per provider and benching providers that are over quota or cooling down.",
+      "slug": "cooldowns-quotas",
+      "title": "Cooldowns and quotas"
+     }
+    ],
+    "description": "Choosing which provider serves each request and moving on transparently when one fails.",
+    "slug": "routing",
+    "title": "Routing and Failover"
+   },
+   {
+    "areas": [
+     {
+      "description": "Running a local CLI tool for a request and deciding which requests a CLI provider can serve.",
+      "slug": "cli-execution",
+      "title": "CLI execution"
+     },
+     {
+      "description": "Turning a CLI tool's output into OpenAI- or Anthropic-shaped replies and streams, with generated ids and token counts.",
+      "slug": "cli-response-synthesis",
+      "title": "Response synthesis"
+     },
+     {
+      "description": "Pulling the real error out of a CLI tool's stderr and reporting it to the caller.",
+      "slug": "cli-errors",
+      "title": "CLI error handling"
+     }
+    ],
+    "description": "Using locally installed AI command-line tools (claude, codex, kiro and similar) as providers in the pool.",
+    "slug": "cli-providers",
+    "title": "Local CLI Providers"
+   },
+   {
+    "areas": [
+     {
+      "description": "Checking every provider at boot and again on a timer, with bounded concurrency, to mark them up or down.",
+      "slug": "health-probes",
+      "title": "Health probes"
+     },
+     {
+      "description": "Running an on-demand test of every configured model from the dashboard.",
+      "slug": "model-testing",
+      "title": "Model testing"
+     },
+     {
+      "description": "Reporting proxy liveness, provider state, aliases and spend via /health and /v1/status.",
+      "slug": "health-endpoint",
+      "title": "Health and status endpoints"
+     }
+    ],
+    "description": "Knowing which providers are alive and which models actually work.",
+    "slug": "provider-health",
+    "title": "Provider Health"
+   },
+   {
+    "areas": [
+     {
+      "description": "Counting input and output tokens per provider and model, with daily totals and live snapshots.",
+      "slug": "token-usage",
+      "title": "Token usage"
+     },
+     {
+      "description": "Pricing each request from configured per-model prices and flagging models that have no price.",
+      "slug": "spend-tracking",
+      "title": "Spend tracking"
+     },
+     {
+      "description": "Warning before a provider's quota is exhausted, rather than finding out when requests start failing.",
+      "slug": "quota-alerts",
+      "title": "Quota alerts"
+     },
+     {
+      "description": "Saving usage counters to a state file atomically so they survive restarts.",
+      "slug": "usage-persistence",
+      "title": "Usage persistence"
+     },
+     {
+      "description": "Exposing request and provider metrics for external monitoring.",
+      "slug": "metrics",
+      "title": "Metrics"
+     }
+    ],
+    "description": "Measuring what the proxy consumes and warning before free tiers run out.",
+    "slug": "usage-and-cost",
+    "title": "Usage and Cost"
+   },
+   {
+    "areas": [
+     {
+      "description": "The interactive terminal view with its provider table, key shortcuts and once-a-second refresh.",
+      "slug": "terminal-dashboard",
+      "title": "Terminal dashboard"
+     },
+     {
+      "description": "How each provider's health, quota use and models are summarised and shown.",
+      "slug": "provider-view",
+      "title": "Provider view"
+     },
+     {
+      "description": "A browser dashboard served by the proxy itself.",
+      "slug": "web-dashboard",
+      "title": "Web dashboard"
+     },
+     {
+      "description": "Capturing recent log lines in memory so they can be shown in the dashboard.",
+      "slug": "live-logs",
+      "title": "Live logs"
+     }
+    ],
+    "description": "The live views operators use to watch and drive the proxy.",
+    "slug": "dashboard",
+    "title": "Dashboard"
+   },
+   {
+    "areas": [
+     {
+      "description": "Loading chicco.yaml with its providers, virtual models, pricing and alert settings.",
+      "slug": "config-file",
+      "title": "Config file"
+     },
+     {
+      "description": "Rejecting broken providers, aliases and settings when the config loads instead of at request time.",
+      "slug": "config-validation",
+      "title": "Config validation"
+     },
+     {
+      "description": "Reloading the config on a signal or file change, on Unix and Windows alike.",
+      "slug": "hot-reload",
+      "title": "Hot reload"
+     }
+    ],
+    "description": "Defining providers, models, prices and alerts, and changing them without a restart.",
+    "slug": "configuration",
+    "title": "Configuration"
+   },
+   {
+    "areas": [
+     {
+      "description": "The chicco command, its flags, and the run loop that starts the server and background jobs.",
+      "slug": "startup",
+      "title": "Startup and command line"
+     },
+     {
+      "description": "Make targets for building, testing, linting and producing release snapshots.",
+      "slug": "build-tooling",
+      "title": "Build tooling"
+     },
+     {
+      "description": "The install script that downloads and sets up a chicco release.",
+      "slug": "installation",
+      "title": "Installation"
+     },
+     {
+      "description": "The Docker image and the checks that keep the Helm chart deployable.",
+      "slug": "container-and-kubernetes",
+      "title": "Container and Kubernetes"
+     }
+    ],
+    "description": "Starting, building, packaging and deploying chicco.",
+    "slug": "operations",
+    "title": "Operations"
+   }
+  ]
+ }
+}
