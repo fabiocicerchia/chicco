@@ -31,7 +31,7 @@ Feature: Keeping usage and cooldowns across restarts
   @id:usage-and-cost.usage-persistence.004 @rule:usage.persistence.old-usage-dropped-on-load @inferred @source:internal/proxy/state.go#EnablePersistence
   Scenario: Usage older than 25 hours is forgotten on restart
     Given provider "groq" saved one request of 999 tokens 26 hours ago
-    And and one request of 100 tokens 1 hour ago
+    And one request of 100 tokens 1 hour ago
     When the operator restarts chicco with the same state file
     Then provider "groq" carries only the 100-token request into its rate-limit windows
 
@@ -49,12 +49,12 @@ Feature: Keeping usage and cooldowns across restarts
       | unreadable          |
 
   @id:usage-and-cost.usage-persistence.006 @rule:usage.persistence.removed-provider-usage-dropped @inferred @source:internal/proxy/state.go#EnablePersistence @questionable
-  Scenario: Saved usage for a provider no longer in the config is discarded
-    Given the state file holds usage for provider "oldprov"
+  Scenario: Saved rate-limit history for a provider no longer in the config is discarded
+    Given the state file holds request history for provider "oldprov"
     And "oldprov" has been removed from chicco.yaml
     When the operator restarts chicco
-    Then no usage is restored for "oldprov"
-    And the next save no longer contains "oldprov" usage
+    Then none of "oldprov"'s saved requests count toward any rate-limit window
+    And the next save no longer contains "oldprov"'s request history
 
   @id:usage-and-cost.usage-persistence.007 @rule:usage.persistence.state-file-owner-only @inferred @source:internal/proxy/state.go#Persist
   Scenario: The saved usage profile is readable only by the operator

@@ -44,7 +44,7 @@ Feature: Answering non-streaming Anthropic messages
 
   @id:api-gateway.anthropic-messages.004 @rule:api-gateway.anthropic-messages.empty-reply-still-succeeds @inferred @source:internal/proxy/anthropic_json.go#respondAnthropicJSON @questionable
   Scenario: A provider reply with no readable content still comes back as an empty successful message
-    Given the provider accepted the request but its reply contains no readable content
+    Given the provider accepted the request but its reply body holds no readable reply chunk at all
     When a client sends POST /v1/messages without "stream": true
     Then the response status is 200
     And "content" is an empty list

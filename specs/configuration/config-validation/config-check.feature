@@ -3,7 +3,7 @@ Feature: Checking a config before it ships
   Lets an operator run `chicco -check` (in CI, a pre-commit hook or by hand) to catch config mistakes that would leave providers unused or fields ignored, and stops a config with broken aliases from loading at all.
 
   Background:
-    Given Given the operator keeps the proxy's settings in chicco.yaml
+    Given the operator keeps the proxy's settings in chicco.yaml
 
   @id:configuration.config-validation.001 @rule:configuration.check.sound-config-passes @verified @source:internal/proxy/validate.go#Validate @test:internal/proxy/config_test.go#TestValidateCleanConfig @test:cmd/chicco/main_test.go#TestStrictCheckPassesAValidConfig
   Scenario Outline: A sound config passes the check, even in strict mode
@@ -75,15 +75,15 @@ Feature: Checking a config before it ships
 
   @id:configuration.config-validation.006 @rule:configuration.aliases.must-target-a-model @verified @source:internal/proxy/validate.go#validateAliases @test:internal/proxy/alias_test.go#TestAliasPointingAtNothingIsRefusedAtLoad @test:internal/proxy/alias_test.go#TestAliasWithAnEmptyTargetIsRefused @test:internal/proxy/alias_test.go#TestAliasCannotShadowAModelID @test:internal/proxy/alias_test.go#TestNoAliasesIsNotAnError
   Scenario Outline: An alias that does not point at a configured model stops the config loading
-    Given chicco.yaml declares virtual model "llama-3.3-70b"
+    Given chicco.yaml is otherwise sound and declares virtual model "llama-3.3-70b"
     And chicco.yaml declares the alias <alias> pointing at <target>
     When the operator starts chicco or runs chicco -check
-    Then chicco refuses the config with "parsing chicco.yaml: <message>"
-    And the command exits with status 1
+    Then <outcome>
+    And chicco -check exits with status <exit_code>
 
     Examples:
-      | alias         | target        | message                                                                       |
-      | broken        | no-such-model | alias "broken" points at "no-such-model", which is not a model in this config |
-      | empty         | ""            | alias "empty" has no target                                                   |
-      | llama-3.3-70b | llama-3.3-70b | alias "llama-3.3-70b" has the same name as a model                            |
-      | fast          | chicco:auto   | (none: the config loads)                                                      |
+      | alias         | target        | outcome                                                                                                              | exit_code |
+      | broken        | no-such-model | chicco refuses the config with "parsing chicco.yaml: alias "broken" points at "no-such-model", which is not a model in this config" | 1         |
+      | empty         | ""            | chicco refuses the config with "parsing chicco.yaml: alias "empty" has no target"                                    | 1         |
+      | llama-3.3-70b | llama-3.3-70b | chicco refuses the config with "parsing chicco.yaml: alias "llama-3.3-70b" has the same name as a model"             | 1         |
+      | fast          | chicco:auto   | the config loads                                                                                                     | 0         |

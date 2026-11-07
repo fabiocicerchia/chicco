@@ -59,13 +59,13 @@ Feature: Reporting why a CLI provider failed
 
   @id:cli-providers.cli-errors.005 @rule:cli-providers.errors.reason-kept-in-error-reply @verified @source:internal/proxy/clierrors.go#cliFailure @test:internal/proxy/cli_test.go#TestCLIFailureKeepsTheReason
   Scenario: The caller's error keeps the CLI's real failure reason, not its stack trace
-    Given "gemini-cli" is the only provider that can answer
+    Given every other provider in the pool is already benched
     And the CLI tool prints a warning, a long stack trace, then "This client is no longer supported"
     When a caller sends a chat completion request routed to "gemini-cli"
     Then the caller receives status 503
     And the error names "gemini-cli: HTTP 401" and includes "This client is no longer supported"
     And the error contains no stack-trace "at …" lines
-    And when the remaining output is longer than 512 bytes, only its last 512 bytes are shown, after a leading "…"
+    And when the remaining output is longer than 512 bytes, the reason shown is a leading "…" plus the end of the output, cut to 512 bytes in all (so its final 3 bytes are lost)
 
   @id:cli-providers.cli-errors.006 @rule:cli-providers.errors.broad-wording-misclassifies @inferred @source:internal/proxy/clierrors.go#cliFailure @questionable
   Scenario Outline: Ordinary retry or expiry wording in CLI output is read as a limit or a logout

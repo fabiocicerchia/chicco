@@ -65,6 +65,7 @@ Feature: Installing chicco with the install script
   Scenario Outline: The installer installs the pinned version, or the latest release when none is pinned
     Given <pinning>
     And the latest published release is v1.5.0
+    And BINDIR is not set and /usr/local/bin is writable
     When the operator runs the install script
     Then <outcome>
 
@@ -85,11 +86,12 @@ Feature: Installing chicco with the install script
       | BINDIR is not set and /usr/local/bin is writable            | chicco is installed as /usr/local/bin/chicco with mode 0755                                       |
       | BINDIR is not set and /usr/local/bin is not writable        | chicco is installed as ~/.local/bin/chicco with mode 0755                                         |
       | BINDIR is set to '/opt/tools/bin' and it is writable        | chicco is installed as /opt/tools/bin/chicco with mode 0755                                       |
-      | BINDIR is set to an existing directory that is not writable | the installer exits with 'chicco-install: cannot write to <dir> — set BINDIR or re-run with sudo' |
+      | BINDIR is set to '/opt/locked/bin', which exists but is not writable | the installer exits with 'chicco-install: cannot write to /opt/locked/bin — set BINDIR or re-run with sudo' |
 
   @id:operations.installation.007 @rule:operations.install.path-hint @inferred @source:install.sh#bindir
   Scenario Outline: The installer tells the operator when the install directory is not on their PATH
-    Given chicco was installed into ~/.local/bin
+    Given the operator's home directory is /home/alex
+    And chicco was installed into ~/.local/bin
     And ~/.local/bin is <onpath> on the operator's PATH
     When the operator runs the install script
     Then the installer <hint>

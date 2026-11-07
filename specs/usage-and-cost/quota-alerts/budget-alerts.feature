@@ -31,8 +31,8 @@ Feature: Warning before a provider's quota runs out
 
   @id:usage-and-cost.quota-alerts.003 @rule:usage.quota-alerts.watches-largest-window-only @verified @source:internal/proxy/config.go#quotaBar @test:internal/proxy/alert_test.go#TestCheckBudgetsReadsTheProvidersOwnWindow @questionable
   Scenario: Only a provider's largest configured quota window is watched for warnings
-    Given provider "groq" has a daily quota of 10000 tokens and a per-minute limit of 30 requests
+    Given provider "groq" also has a per-minute limit of 30 requests
     And groq has used 30 requests this minute and 500 tokens today
     When a request served by groq is recorded
     Then no quota warning is logged
-    And a warning is logged only when groq reaches 80% of its 10000 daily tokens
+    And a warning is logged only when groq reaches 80% of its 1000 daily tokens

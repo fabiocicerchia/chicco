@@ -34,10 +34,10 @@ Feature: Answering callers from a CLI tool's output
   @id:cli-providers.cli-response-synthesis.003 @rule:cli.replies.token-usage-reported-or-estimated @verified @source:internal/proxy/cli.go#runCLI @test:internal/proxy/cli_test.go#TestDotGetAndExtract @test:internal/proxy/cli_test.go#TestRunCLIEndToEnd
   Scenario Outline: A CLI-served reply always carries token usage, exact when the tool reports it
     Given the provider <paths>
-    And the tool prints a 400-character prompt's answer of 40 characters with usage output_tokens 42 and input_tokens 7
-    When a caller sends a chat request
+    And the tool prints a 40-character answer with usage output_tokens 42 and input_tokens 7
+    When a caller sends a chat request whose prompt is 400 characters
     Then the reply reports <prompt_tokens> prompt tokens and <completion_tokens> completion tokens
-    And the provider's usage counters grow by the same amount
+    And the provider's usage counters grow by their total
 
     Examples:
       | paths                                                                             | prompt_tokens                      | completion_tokens                 |

@@ -3,7 +3,7 @@ Feature: Starting the proxy
   Lets an operator start chicco safely, refusing setups that would expose provider keys or serve nothing, and making it clear from the log how the proxy is running.
 
   Background:
-    Given chicco holds a working API key for every configured provider
+    Given chicco forwards requests using the provider API keys held in chicco.yaml
 
   @id:operations.startup.006 @rule:operations.startup.no-open-listener-on-routable-address @verified @source:internal/proxy/run.go#RequireAuthOnBind @test:internal/proxy/bind_test.go#TestRequireAuthOnBind
   Scenario Outline: chicco refuses to listen on a reachable address without its own API key
@@ -43,7 +43,7 @@ Feature: Starting the proxy
 
   @id:operations.startup.009 @rule:operations.startup.refuse-without-usable-providers @inferred @source:internal/proxy/run.go#Run
   Scenario: chicco refuses to start when no provider can serve requests
-    Given no provider in chicco.yaml has both an API key and at least one model
+    Given no provider in chicco.yaml has at least one model and, for an HTTP provider, an API key
     When the operator starts chicco
     Then stderr says no providers with an API key and models are configured, and points at the providers list and api_key env vars in the config file
     And chicco exits with status 1

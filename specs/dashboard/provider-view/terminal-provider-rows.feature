@@ -18,7 +18,7 @@ Feature: Seeing each provider's state and quota use in the terminal dashboard
       | failing authentication                              | ●    | grey   | auth failed — check API key           |
       | unreachable                                         | ●    | grey   | unreachable                           |
       | not yet probed                                      | ○    | grey   | checking…                             |
-      | benched on a rate limit that reopens at 14:30 today | ◐    | amber  | limit · resets 14:30                  |
+      | benched on a rate limit that reopens at 14:30, under 12 hours away | ◐    | amber  | limit · resets 14:30                  |
       | cooling down for 47s after an error                 | ◐    | amber  | its usage bar followed by "cd 47s"    |
       | healthy                                             | ●    | green  | its usage bar and percentage          |
 
@@ -41,7 +41,7 @@ Feature: Seeing each provider's state and quota use in the terminal dashboard
     When the dashboard refreshes
     Then "groq" takes <count> rows
     And the first row carries the provider name, its kind, the model "<first>" and the provider's own usage and request count
-    And each further row shows only a model name with that model's request count
+    And each further row shows only the model name with that model's own usage, request count and bar
 
     Examples:
       | models                                    | count | first        |
@@ -65,7 +65,7 @@ Feature: Seeing each provider's state and quota use in the terminal dashboard
   @id:dashboard.provider-view.005 @rule:dashboard.provider-view.model-falls-back-to-provider-quota @inferred @source:internal/proxy/uiprovider.go#modelCells @questionable
   Scenario: A model without its own quota is measured against the provider's quota using its all-time totals
     Given a provider "groq" with a daily quota of 1000 tokens
-    And its second model "llama-3.3-70b" has no quota of its own and has used 1200 tokens since chicco started, 200 of them today
+    And its second model "llama-3.3-70b" has no quota of its own and has used 1200 tokens in total, 200 of them today
     When the dashboard refreshes
     Then the "llama-3.3-70b" row's usage cell reads "1.2k / 1.0k"
     And its bar is full at 120%

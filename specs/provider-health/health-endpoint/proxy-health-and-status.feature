@@ -23,7 +23,7 @@ Feature: Reporting proxy health and live status
 
   @id:provider-health.health-endpoint.002 @rule:provider-health.health.unconfigured-providers-omitted @gap @source:internal/proxy/proxy.go#handleHealth
   Scenario: Providers with no API key or no models are left out of the health report
-    Given provider "spare" is configured without an API key
+    Given provider "spare" is an HTTP provider (not kind: cli) configured without an API key
     And provider "main" is healthy
     When the orchestrator calls GET /health
     Then the body field "providers" lists "main"

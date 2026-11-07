@@ -59,7 +59,7 @@ Feature: Loading chicco.yaml
 
   @id:configuration.config-file.011 @rule:configuration.config-file.provider-models-inferred-from-virtual-models @inferred @source:internal/proxy/configload.go#resolveModels
   Scenario: A provider declared without a models list serves the models its virtual-model backends name
-    Given provider "groq" is declared without a models list
+    Given http provider "groq" is declared with a base_url and an api_key but without a models list
     And virtual model "llama-3.3-70b" has a backend with provider "groq" and model "llama-70b"
     And virtual model "fast-chat" has a backend with provider "groq" and model "llama-70b" and another with model "llama-8b"
     When chicco loads the configuration
@@ -72,4 +72,4 @@ Feature: Loading chicco.yaml
     And virtual model "llama-3.3-70b" has a backend with provider "groq" and model "llama-70b"
     When chicco loads the configuration
     Then provider "groq" has the models "llama-70b" and "llama-70b"
-    And "llama-70b" appears twice in groq's model rotation and per-model usage
+    And "llama-70b" appears twice in groq's model rotation and in its model list on the dashboard

@@ -37,7 +37,7 @@ Feature: Guarding the proxy with its own API key
     Given chicco.yaml sets api_key to "s3cret"
     When a liveness probe requests GET /health without an Authorization header
     Then the response status is 200
-    And the body reports each provider's state
+    And the body reports an overall status and each active provider's state
 
   @id:api-gateway.access-control.005 @rule:gateway.access.dashboard-key-exchange @verified @source:internal/proxy/auth.go#withAuth @test:internal/proxy/proxy_test.go#TestInboundAuth
   Scenario: A browser trades the proxy key once for a dashboard session

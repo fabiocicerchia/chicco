@@ -28,7 +28,7 @@ Feature: Accepting Anthropic Messages requests for any provider
     When the client posts the request to /v1/messages
     Then the provider receives "be terse" as the system instruction ahead of the conversation
     And the provider receives the user turn "ping"
-    And a local CLI provider receives both texts in its prompt
+    And this holds when the answering provider is a local CLI, whose prompt contains both texts
 
     Examples:
       | system_form           |

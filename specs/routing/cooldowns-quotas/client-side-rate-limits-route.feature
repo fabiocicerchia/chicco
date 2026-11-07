@@ -16,15 +16,16 @@ Feature: Respecting configured rate limits before calling providers
   @id:routing.cooldowns-quotas.008 @rule:quotas.limits.model-limit-benches-only-that-model @inferred @source:internal/proxy/route.go#pick
   Scenario: A backend model that has reached its own limit is skipped while the provider's other models still serve
     Given the virtual model "coder" lists groq/llama-3.3-70b with a limit of 10 requests per day, and groq/gemma2-9b with no limit of its own
-    And "llama-3.3-70b" on "groq" has served 10 requests today
-    When a client requests a completion with the model "coder"
-    Then the request is served by "groq" with the model "gemma2-9b"
+    And "llama-3.3-70b" on "groq" has served 10 requests in the last 24 hours
+    When clients send successive completion requests with the model "coder"
+    Then no request is sent to "groq" with the model "llama-3.3-70b"
+    And the requests that reach "groq" are served with the model "gemma2-9b"
     And "groq" itself is not cooling down
 
   @id:routing.cooldowns-quotas.009 @rule:quotas.limits.global-cap-refuses-all @verified @source:internal/proxy/route.go#pick @test:internal/proxy/proxy_test.go#TestGlobalQuotaCapsAcrossProviders
   Scenario: Once the global limit is reached every request is refused with 503, even though the providers are fine
     Given chicco is configured with a global limit of 2 requests per day
     And "groq" has no limit of its own
-    And 2 requests have been served today
+    And 2 requests have been served in the last 24 hours
     When a client requests a completion at POST /v1/chat/completions
     Then the response status is 503

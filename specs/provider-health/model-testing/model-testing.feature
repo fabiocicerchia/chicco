@@ -49,7 +49,7 @@ Feature: Testing every configured model on demand
       | 429                           | and no retry hint               | limit reached                                    | 1 minute   | limit  | unchanged    |
       | 500                           | with body "upstream overloaded" | error: upstream overloaded                       | 1 minute   | error  | unchanged    |
       | 404                           | with body "model not found"     | error: model not found                           | 5 seconds  | error  | unchanged    |
-      | no reply (connection refused) |                                 | error: <connection error, at most 60 characters> | 1 minute   | error  | unchanged    |
+      | no reply (connection refused) |                                 | error: <connection error, at most 60 characters> | 1 minute   | error  | down         |
 
   @id:provider-health.model-testing.005 @rule:provider-health.model-testing.reports-quota-window @inferred @source:internal/proxy/test.go#windowDesc
   Scenario Outline: Each test line ends with the provider's quota standing
@@ -58,11 +58,11 @@ Feature: Testing every configured model on demand
     Then each "groq" line in the log ends with "<window>"
 
     Examples:
-      | quota_setup                                    | window                                      |
-      | a rate-limit bench with 25 minutes left        | LIMIT — resets in 25m0s                     |
-      | a daily quota of 500000 tokens with 12345 used | 12.3k/500.0k tok · daily                    |
-      | an hourly quota of 100 requests with 7 made    | 7/100 req · hourly                          |
-      | no quota configured                            | no tracked quota (subscription / per-token) |
+      | quota_setup                                                                      | window                                      |
+      | a rate-limit bench with 25 minutes left and its models answer the test           | LIMIT — resets in 25m0s                     |
+      | a daily quota of 500000 tokens with 12345 used, counting the test's own replies  | 12.3k/500.0k tok · daily                    |
+      | an hourly quota of 100 requests with 7 made, counting the test's own requests    | 7/100 req · hourly                          |
+      | no quota configured                                                              | no tracked quota (subscription / per-token) |
 
   @id:provider-health.model-testing.006 @rule:provider-health.model-testing.single-run-at-a-time @inferred @source:internal/proxy/test.go#runTest
   Scenario: Only one model test runs at a time

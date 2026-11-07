@@ -3,7 +3,7 @@ Feature: Reloading the config without a restart
   Lets an operator apply chicco.yaml edits (rotated keys, added or removed providers, strategies, aliases, quotas) to a running proxy without losing live usage, cooldowns or the dashboard.
 
   Background:
-    Given chicco is running from chicco.yaml on a Unix host
+    Given chicco is running from chicco.yaml
 
   @id:configuration.hot-reload.001 @rule:config.hot-reload.applies-edits-on-signal @verified @source:internal/proxy/reload.go#reloadFromFile @test:internal/proxy/reload_test.go#TestReloadPreservesLiveState @test:internal/proxy/alias_test.go#TestReloadPicksUpAliasChanges
   Scenario: A SIGHUP applies chicco.yaml edits to the running proxy
@@ -28,7 +28,7 @@ Feature: Reloading the config without a restart
       | alias "fast" points at a model nobody configured | "chicco: reload failed, keeping current config: ..."                                        | still serving with the previous config       |
       | model "smart" uses strategy "fastest"            | "chicco: reload rejected — model smart: unknown strategy ..."                               | still serving with the previous config       |
       | no providers are left                            | "chicco: reload rejected — no providers configured"                                         | still serving with the previous config       |
-      | provider "groq" has an empty api_key             | "chicco: reload warning: provider groq: no api_key (unset env var?) — provider is inactive" | serving with the new config, "groq" inactive |
+      | provider "groq" has an empty api_key             | "chicco: reload warning: groq: no api_key (unset env var?) — provider is inactive"          | serving with the new config, "groq" inactive |
 
   @id:configuration.hot-reload.003 @rule:config.hot-reload.open-bind-auth-not-rechecked @inferred @source:internal/proxy/reload.go#reloadFromFile @questionable
   Scenario: Removing api_key by reload leaves an exposed proxy open

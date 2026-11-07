@@ -50,7 +50,7 @@ Feature: Respecting provider rate limits
     Examples:
       | window   | used |
       | daily    | 150  |
-      | hourly   | 150  |
+      | hourly   | 250  |
       | minutely | 0    |
       | none     | 250  |
 

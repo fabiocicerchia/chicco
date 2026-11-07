@@ -14,7 +14,7 @@ Feature: Reading the terminal dashboard
 
     Examples:
       | share | colour | fill                            |
-      | 30%   | green  | about a third filled            |
+      | 30%   | green  | about 30% filled                |
       | 60%   | amber  | about 60% filled                |
       | 84%   | amber  | about 84% filled                |
       | 85%   | red    | about 85% filled                |

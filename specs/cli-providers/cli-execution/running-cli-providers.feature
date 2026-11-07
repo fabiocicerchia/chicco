@@ -17,7 +17,7 @@ Feature: Serving requests from a local CLI tool
       | {{system}}      | be terse                                                            |
       | {{user}}        | ping                                                                |
       | {{prompt}}      | be terse, a blank line, then ping                                   |
-      | {{output_file}} | the path of a fresh temporary file the tool may write its answer to |
+      | {{output_file}} | with output_file: true, the path of a fresh temporary file the tool writes its answer to (empty otherwise) |
 
   @id:cli-providers.cli-execution.002 @rule:cli.execution.failed-run-fails-over @verified @source:internal/proxy/cli.go#cliRun @test:internal/proxy/cli_test.go#TestRunCLIFailureFailsOver
   Scenario Outline: A CLI tool that fails is benched and the request moves to the next provider
@@ -32,11 +32,11 @@ Feature: Serving requests from a local CLI tool
       | exits with a non-zero status                        |
       | runs longer than its timeout                        |
       | is not installed                                    |
-      | exits cleanly but writes nothing to its output file |
+      | exits cleanly but its output file is gone           |
 
   @id:cli-providers.cli-execution.003 @rule:cli.execution.reported-error-not-served @verified @source:internal/proxy/cli.go#extractCompletion @test:internal/proxy/cli_test.go#TestDotGetAndExtract
   Scenario Outline: An error the CLI tool reports in its JSON output is never served as the answer
-    Given the provider has output "json" and error_path "is_error"
+    Given the provider has output "json", result_path "result" and error_path "is_error"
     And a second, working provider serves the same model
     And the tool exits cleanly printing is_error <flag> with result "Not logged in"
     When a caller sends a chat request

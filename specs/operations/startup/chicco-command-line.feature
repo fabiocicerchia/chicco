@@ -47,4 +47,4 @@ Feature: Running and checking chicco from the command line
     When the operator runs chicco -h
     Then chicco prints a description of the proxy and the list of flags with their defaults on stderr
     And the help shows the example "chicco -config chicco.yaml -addr :41986"
-    And the help tells the operator to point an OpenAI client at http://<default address>/v1
+    And the help tells the operator to point an OpenAI client at http://127.0.0.1:41986/v1

@@ -29,7 +29,7 @@ Feature: Running chicco from its container image
 
   @id:operations.container-and-kubernetes.004 @rule:operations.container.health-from-health-endpoint @inferred @source:Dockerfile#HEALTHCHECK @questionable
   Scenario Outline: The container reports healthy only while chicco answers its health endpoint on port 41986
-    Given chicco is configured to listen on <addr>
+    Given chicco.yaml sets an api_key and chicco is configured to listen on <addr>
     When the container runtime runs its health check
     Then the container is reported <state>
 
