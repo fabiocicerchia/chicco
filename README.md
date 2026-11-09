@@ -1,5 +1,12 @@
 # chicco
 
+> [!WARNING]
+> **This project is retired** and no longer maintained. If you need something
+> for this, [OmniRoute](https://github.com/cheaper-inference/OmniRoute) puts
+> many LLM providers behind one OpenAI- and Anthropic-compatible endpoint with
+> quota-aware fallback. It is a separate project, actively developed, and worth
+> a look.
+
 [![ci](https://github.com/fabiocicerchia/chicco/actions/workflows/ci.yml/badge.svg)](https://github.com/fabiocicerchia/chicco/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/fabiocicerchia/chicco?sort=semver)](https://github.com/fabiocicerchia/chicco/releases/latest)
 [![Go Reference](https://pkg.go.dev/badge/github.com/fabiocicerchia/chicco.svg)](https://pkg.go.dev/github.com/fabiocicerchia/chicco)
